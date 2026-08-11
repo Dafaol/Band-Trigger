@@ -1,30 +1,28 @@
 # Fit-HomeConnect
 Um app para usar smartband para controlar lâmpadas
 
-# ⌚💡 Fit HomeConnect
+# ⌚💡 Band Light Connect
+Um app Android open-source simples para controlar lâmpadas inteligentes usando os botões de mídia de qualquer smartband ou relógio.
 
-Bem-vindo ao **Fit HomeConnect**! Um aplicativo Android open-source criado para resolver um problema comum: a falta de controle de automação residencial em smartbands e relógios mais simples.
+## 🏍️ A Origem do Projeto
+Eu trabalho de madrugada e utilizo uma moto para locomoção. Sempre chego às 05:15 da manhã (ainda de noite). Quase sempre meu celular vem guardado no fundo da mochila, seja por causa da chuva ou porque o bolso da calça é curto e não me passa segurança de que o aparelho não vai cair no meio do caminho.
 
-## 🎯 O Problema
-Dispositivos como o Galaxy Fit 3 (e outras pulseiras inteligentes) possuem controles nativos excelentes para **mídia**, mas não oferecem suporte direto para aplicativos de casa inteligente (como o Google Home ou SmartThings).
+Ao chegar em casa, tem todo aquele processo de tirar o capacete e as luvas em dias sem chuva, porque se estiver chovendo tem que tirar a capa de chuva também. Isso estava me deixando incomodado, porque não tenho mãos suficientes para pegar o celular e ligar a lâmpada do quarto para enxergar o caminho, e por algum motivo eu tenho vergonha de usar comando de voz. 
 
-## 🚀 A Solução
-O **Fit HomeConnect** atua como uma ponte invisível. Ele simula uma "Sessão de Mídia" (MediaSession) no seu smartphone Android. Quando o seu relógio se conecta ao celular, ele reconhece o app como um player de música. 
+Certa vez, ao ir dormir depois de todo esse processo, uma onda de pensamentos tomou conta da minha mente: *"Caramba, seria tão bom se a minha smartband pudesse ligar a lâmpada do quarto com 1 toque. Que triste, a única comunicação que minha smartband tem com o celular é pelo controle de mídia... espera aí, e se eu tentar interceptar esses comandos que o relógio manda para o celular para fazer outra coisa?"* E foi aí, antes de dormir, que surgiu a ideia.
 
-Ao invés de pausar uma música, os botões do seu relógio são interceptados pelo aplicativo e transformados em comandos para as suas lâmpadas inteligentes:
+## 🛠️ Como funciona a "gambiarra" inteligente
+A maioria das pulseiras genéricas consegue controlar a mídia do celular (pausar, pular música). O Band Light Connect se aproveita exatamente dessa função.
 
-*   **Pausar / Dar Play:** Liga e desliga a lâmpada inteligente.
-*   **Avançar (Next):** Aumenta o brilho da lâmpada.
-*   **Voltar (Previous):** Diminui o brilho da lâmpada.
+O app cria um "player de música fantasma" (usando a classe `MediaSession` do Android). O relógio acha que está controlando uma música do celular, mas na verdade o aplicativo intercepta esses cliques e os transforma em ações para a lâmpada:
 
-## 🛠️ Tecnologias Utilizadas
-*   **Android (Kotlin):** Linguagem principal do aplicativo.
-*   **MediaSessionCompat:** Para gerar a notificação de mídia falsa e capturar os eventos do relógio.
-*   **Integração Webhook / API HTTP:** Para enviar os comandos de execução para a lâmpada inteligente.
+* **Play / Pause:** Liga ou desliga a luz.
+* **Avançar (Next):** Aumenta o brilho.
+* **Voltar (Previous):** Diminui o brilho.
 
-## 💡 Por que este projeto existe?
-Este projeto nasceu da ideia de que não é preciso comprar um smartwatch caro e complexo apenas para ter o conforto de apagar as luzes do quarto pelo pulso. Com um pouco de criatividade e interceptação de eventos de mídia, qualquer smartband pode virar um controle remoto para sua casa.
+## 🎯 Pra quem é útil?
+Eu criei isso para resolver o meu problema na moto, mas o projeto acaba servindo para qualquer pessoa que:
 
-## 🤝 Como Contribuir
-(Em breve - O projeto está na fase inicial de estruturação da lógica).
-
+* Quer controlar a casa pelo pulso, mas não quer gastar uma fortuna em um smartwatch caro.
+* Odeia ter que gritar comandos de voz para acender a luz no meio da noite.
+* Costuma estar com o celular inacessível e precisa de um atalho rápido no pulso.
