@@ -1,25 +1,38 @@
-# ⌚💡 Band Light Connect
-Um app Android open-source simples para controlar lâmpadas inteligentes usando os botões de mídia de qualquer smartband ou relógio.
+# ⌚ Band Light Connect 💡
 
-## 🏍️ A Origem do Projeto
-Eu trabalho de madrugada e utilizo uma moto para locomoção. Sempre chego às 05:15 da manhã (ainda de noite). Quase sempre meu celular vem guardado no fundo da mochila, seja por causa da chuva ou porque o bolso da calça é curto e não me passa segurança de que o aparelho não vai cair no meio do caminho.
+O **Band Light Connect** é um aplicativo Android desenvolvido para integrar smartbands (como o Galaxy Fit 3) com dispositivos de casa inteligente (lâmpadas Positivo / ecossistema Smart Life). 
 
-Ao chegar em casa, tem todo aquele processo de tirar o capacete e as luvas em dias sem chuva, porque se estiver chovendo tem que tirar a capa de chuva também. Isso estava me deixando incomodado, porque não tenho mãos suficientes para pegar o celular e ligar a lâmpada do quarto para enxergar o caminho, e por algum motivo eu tenho vergonha de usar comando de voz. 
+Ele atua de forma invisível no celular, interceptando os comandos de mídia do relógio (Play/Pause) e transformando-os em gatilhos de automação (Webhooks) para acender ou apagar as luzes do ambiente.
 
-Certa vez, ao ir dormir depois de todo esse processo, uma onda de pensamentos tomou conta da minha mente: *"Caramba, seria tão bom se a minha smartband pudesse ligar a lâmpada do quarto com 1 toque. Que triste, a única comunicação que minha smartband tem com o celular é pelo controle de mídia... espera aí, e se eu tentar interceptar esses comandos que o relógio manda para o celular para fazer outra coisa?"* E foi aí, antes de dormir, que surgiu a ideia.
+## 🚀 Funcionalidades (Versão 0.9)
 
-## 🛠️ Como funciona a "gambiarra" inteligente
-A maioria das pulseiras genéricas consegue controlar a mídia do celular (pausar, pular música). O Band Light Connect se aproveita exatamente dessa função.
+* **Serviço em Segundo Plano:** O aplicativo roda um `MediaSession` oculto, enganando o sistema Android para que o relógio acredite que há uma música tocando.
+* **Controle pelo Pulso:** Permite ligar e desligar a luz utilizando o botão central (Play/Pause) da interface de mídia da smartband.
+* **Configuração Universal:** Interface simples para o usuário colar seus próprios links de Webhook, salvando as informações nativamente na memória do aparelho via `SharedPreferences`.
+* **Sem Custos:** Projetado para funcionar com a plataforma gratuita Sequematic, contornando limitações pagas de serviços como o IFTTT.
 
-O app cria um "player de música fantasma" (usando a classe `MediaSession` do Android). O relógio acha que está controlando uma música do celular, mas na verdade o aplicativo intercepta esses cliques e os transforma em ações para a lâmpada:
+## 🛠️ Como configurar e usar
 
-* **Play / Pause:** Liga ou desliga a luz.
-* **Avançar (Next):** Aumenta o brilho.
-* **Voltar (Previous):** Diminui o brilho.
+1. **Crie suas automações:**
+   * Crie uma conta gratuita no [Sequematic](https://sequematic.com/).
+   * Vincule sua conta da **Smart Life**.
+   * Crie duas sequências usando o gatilho de **Custom Webhook**: uma para acender a lâmpada (Turn On) e outra para apagar (Turn Off). O Sequematic irá gerar dois links únicos.
 
-## 🎯 Pra quem é útil?
-Eu criei isso para resolver o meu problema na moto, mas o projeto acaba servindo para qualquer pessoa que:
+2. **Configure o App:**
+   * Instale o arquivo `.apk` no seu celular Android.
+   * Abra o Band Light Connect.
+   * Cole o link de Ligar no primeiro campo e o link de Desligar no segundo campo.
+   * Clique em **Salvar Configurações**.
 
-* Quer controlar a casa pelo pulso, mas não quer gastar uma fortuna em um smartwatch caro.
-* Odeia ter que gritar comandos de voz para acender a luz no meio da noite.
-* Costuma estar com o celular inacessível e precisa de um atalho rápido no pulso.
+3. **Controle a Luz:**
+   * Abra o controlador de mídia na sua smartband.
+   * Aperte o botão de **Play/Pause** para alternar o estado da sua lâmpada inteligente.
+
+## 💻 Tecnologias Utilizadas
+* **Linguagem:** Kotlin
+* **IDE:** Android Studio
+* **Integrações:** Webhooks (HTTP GET requests), API Smart Life via Sequematic.
+* **Componentes Android:** `MediaSession`, `Service`, `SharedPreferences`, `HttpURLConnection`.
+
+---
+*Desenvolvido por Daniel Fagundes de Oliveira*
