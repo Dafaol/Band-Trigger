@@ -1,6 +1,3 @@
-# Band_Light_Connect
-Um app para usar smartband para controlar lâmpadas
-
 # ⌚💡 Band Light Connect
 Um app Android open-source simples para controlar lâmpadas inteligentes usando os botões de mídia de qualquer smartband ou relógio.
 
