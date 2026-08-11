@@ -4,7 +4,7 @@ O **Band Light Connect** é um aplicativo Android desenvolvido por mim para inte
 
 Ele roda em segundo plano fingindo ser um player de mídia, interceptando os comandos de Play/Pause do relógio e transformando-os em gatilhos de automação (Webhooks) para acender ou apagar dispositivos à distância.
 
-#🏍️ A Origem do Projeto
+🏍️ A Origem do Projeto
 Eu trabalho de madrugada e utilizo uma moto para locomoção. Sempre chego às 05:15 da manhã (ainda de noite). Quase sempre meu celular vem guardado no fundo da mochila, seja por causa da chuva ou porque o bolso da calça é curto e não me passa segurança de que o aparelho não vai cair no meio do caminho.
 
 Ao chegar em casa, tem todo aquele processo de tirar o capacete e as luvas em dias sem chuva, porque se estiver chovendo tem que tirar a capa de chuva também. Isso estava me deixando incomodado, porque não tenho mãos suficientes para pegar o celular e ligar a lâmpada do quarto para enxergar o caminho, e por algum motivo eu tenho vergonha de usar comando de voz.
