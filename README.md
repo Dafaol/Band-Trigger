@@ -1,4 +1,4 @@
-# Fit-HomeConnect
+# Band_Light_Connect
 Um app para usar smartband para controlar lâmpadas
 
 # ⌚💡 Band Light Connect
