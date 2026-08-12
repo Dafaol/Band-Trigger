@@ -3,15 +3,21 @@ package com.bandlightconnect.app
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import org.json.JSONArray
 
 class MediaService : Service() {
     private var mediaSession: MediaSession? = null
+
+    // VARIÁVEL ADICIONADA: O gerente de áudio que vai dar a carteirada
+    private lateinit var audioManager: AudioManager
 
     // Lista interna do serviço e posição atual
     private var automationList = mutableListOf<Automation>()
@@ -20,12 +26,11 @@ class MediaService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        // INICIALIZANDO O GERENTE DE ÁUDIO
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         mediaSession = MediaSession(this, "BandTriggerSession")
 
-        // 1. Carrega a lista do banco de dados (JSON) assim que o serviço inicia
         loadAutomationsFromMemory()
-
-        // 2. Atualiza a tela do relógio com o primeiro item da lista
         updateWatchDisplay()
 
         mediaSession?.setCallback(object : MediaSession.Callback() {
@@ -43,7 +48,6 @@ class MediaService : Service() {
 
             override fun onSkipToNext() {
                 if (automationList.isNotEmpty()) {
-                    // Pula para o próximo. Se chegar no final, volta para o início (0)
                     currentIndex = (currentIndex + 1) % automationList.size
                     updateWatchDisplay()
                     Log.d("BandTrigger", "⏭️ NEXT -> Index: $currentIndex")
@@ -52,7 +56,6 @@ class MediaService : Service() {
 
             override fun onSkipToPrevious() {
                 if (automationList.isNotEmpty()) {
-                    // Volta para o anterior. Se chegar no zero, vai para o último da lista
                     currentIndex = if (currentIndex - 1 < 0) automationList.size - 1 else currentIndex - 1
                     updateWatchDisplay()
                     Log.d("BandTrigger", "⏮️ PREVIOUS -> Index: $currentIndex")
@@ -62,6 +65,42 @@ class MediaService : Service() {
 
         updatePlaybackState(PlaybackState.STATE_PAUSED)
         mediaSession?.isActive = true
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        loadAutomationsFromMemory()
+        updateWatchDisplay()
+
+        // Dá a carteirada do áudio
+        requestAudioFocus()
+        mediaSession?.isActive = true
+
+        // TRUQUE DO BLUETOOTH: Fingimos que demos "Play" para forçar o relógio a olhar pra cá
+        updatePlaybackState(PlaybackState.STATE_PLAYING)
+
+        // E 100 milissegundos depois, voltamos silenciosamente pro "Pause"
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            updatePlaybackState(PlaybackState.STATE_PAUSED)
+        }, 100)
+
+        return START_STICKY
+    }
+
+    // FUNÇÃO ADICIONADA: Onde o roubo de foco realmente acontece
+    private fun requestAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener { /* Ignora se perder o foco */ }
+                .build()
+            audioManager.requestAudioFocus(focusRequest)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                { /* Ignora se perder o foco */ },
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
     }
 
     private fun loadAutomationsFromMemory() {
@@ -83,7 +122,6 @@ class MediaService : Service() {
     }
 
     private fun updateWatchDisplay() {
-        // Se a lista estiver vazia, avisa no relógio. Se não, mostra o nome da automação atual.
         val title = if (automationList.isNotEmpty()) automationList[currentIndex].name else "No Automations"
 
         val metadata = MediaMetadata.Builder()
@@ -133,6 +171,9 @@ class MediaService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::audioManager.isInitialized) {
+            audioManager.abandonAudioFocus { }
+        }
         mediaSession?.release()
     }
 }
