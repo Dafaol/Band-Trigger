@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#2C2C2C"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/textDialogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="New Automation"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/editNome"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:backgroundTint="#BB86FC"
+        android:hint="Name (e.g. Bedroom Light)"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#AAAAAA" />
+
+    <EditText
+        android:id="@+id/editUrlLigar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:backgroundTint="#BB86FC"
+        android:hint="Turn On URL (Webhook)"
+        android:inputType="textUri"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#AAAAAA" />
+
+    <EditText
+        android:id="@+id/editUrlDesligar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#BB86FC"
+        android:hint="Turn Off URL (Optional)"
+        android:inputType="textUri"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#AAAAAA" />
+
+</LinearLayout>
