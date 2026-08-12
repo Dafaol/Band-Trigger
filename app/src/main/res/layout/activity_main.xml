@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Band Trigger"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Link para LIGAR a lâmpada:" />
+
+    <EditText
+        android:id="@+id/editUrlLigar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Cole o link aqui..."
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Link para DESLIGAR a lâmpada:" />
+
+    <EditText
+        android:id="@+id/editUrlDesligar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Cole o link aqui..."
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/btnSalvar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SALVAR CONFIGURAÇÕES" />
+
+</LinearLayout>
