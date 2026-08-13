@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- Switch for Hijack Band Focus -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switchHijackFocus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Hijack Band Focus"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:thumbTint="@color/bottom_nav_colors" />
+
+    <!-- Description text below the switch -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Automatically takes over the smartwatch screen when other media is paused. If disabled, the app still works. However, you need to open the app whenever you pause media on your phone so that Band Trigger gains control of the watch's media playback."
+        android:textColor="#AAAAAA"
+        android:textSize="14sp" />
+
+</LinearLayout>

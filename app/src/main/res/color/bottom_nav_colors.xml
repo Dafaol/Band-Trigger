@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cor quando o botão está selecionado (Roxo) -->
+    <item android:state_checked="true" android:color="#BB86FC" />
+    <!-- Cor quando está inativo (Cinza) -->
+    <item android:color="#888888" />
+</selector>
