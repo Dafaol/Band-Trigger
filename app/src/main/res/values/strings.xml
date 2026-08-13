@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Band Trigger</string>
+    <string name="accessibility_desc">Band Trigger Remote Shutter Service</string>
 </resources>

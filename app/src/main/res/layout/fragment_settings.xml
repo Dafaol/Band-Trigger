@@ -27,4 +27,41 @@
         android:textColor="#AAAAAA"
         android:textSize="14sp" />
 
+    <!-- Line/Separator -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="24dp"
+        android:background="#2A2A2A" />
+
+    <!-- Camera Shutter Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Hardware Controls"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <!-- Optional Switch: Camera Shutter -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switchCameraShutter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Use as Remote Camera Shutter"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        app:thumbTint="#BB86FC"
+        app:trackTint="#88BB86FC" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Uses Accessibility Service to simulate a volume button click, triggering photos in most camera apps. You must enable it manually in Android settings."
+        android:textColor="#888888"
+        android:textSize="14sp" />
+
 </LinearLayout>

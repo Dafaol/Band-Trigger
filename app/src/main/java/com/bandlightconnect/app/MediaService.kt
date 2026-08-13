@@ -14,34 +14,35 @@ import android.util.Log
 import org.json.JSONArray
 
 class MediaService : Service() {
+
     private var mediaSession: MediaSession? = null
 
-    // VARIÁVEL ADICIONADA: O gerente de áudio que vai dar a carteirada
+    // AudioManager instance used to hijack audio focus
     private lateinit var audioManager: AudioManager
 
-    // Lista interna do serviço e posição atual
+    // Internal service list and current index
     private var automationList = mutableListOf<Automation>()
     private var currentIndex = 0
 
     override fun onCreate() {
         super.onCreate()
 
-        // INICIALIZANDO O GERENTE DE ÁUDIO
+        // Initialize AudioManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        mediaSession = MediaSession(this, "BandTriggerSession")
 
+        mediaSession = MediaSession(this, "BandTriggerSession")
         loadAutomationsFromMemory()
         updateWatchDisplay()
 
         mediaSession?.setCallback(object : MediaSession.Callback() {
             override fun onPlay() {
-                Log.d("BandTrigger", "▶️ PLAY pressed")
+                Log.d("BandTrigger", "  PLAY pressed")
                 updatePlaybackState(PlaybackState.STATE_PLAYING)
                 triggerCurrentWebhook(isTurnOn = true)
             }
 
             override fun onPause() {
-                Log.d("BandTrigger", "⏸️ PAUSE pressed")
+                Log.d("BandTrigger", "  PAUSE pressed")
                 updatePlaybackState(PlaybackState.STATE_PAUSED)
                 triggerCurrentWebhook(isTurnOn = false)
             }
@@ -50,7 +51,7 @@ class MediaService : Service() {
                 if (automationList.isNotEmpty()) {
                     currentIndex = (currentIndex + 1) % automationList.size
                     updateWatchDisplay()
-                    Log.d("BandTrigger", "⏭️ NEXT -> Index: $currentIndex")
+                    Log.d("BandTrigger", "  NEXT -> Index: $currentIndex")
                 }
             }
 
@@ -58,7 +59,7 @@ class MediaService : Service() {
                 if (automationList.isNotEmpty()) {
                     currentIndex = if (currentIndex - 1 < 0) automationList.size - 1 else currentIndex - 1
                     updateWatchDisplay()
-                    Log.d("BandTrigger", "⏮️ PREVIOUS -> Index: $currentIndex")
+                    Log.d("BandTrigger", "  PREVIOUS -> Index: $currentIndex")
                 }
             }
         })
@@ -71,14 +72,14 @@ class MediaService : Service() {
         loadAutomationsFromMemory()
         updateWatchDisplay()
 
-        // Dá a carteirada do áudio
+        // Request audio focus to hijack media controls
         requestAudioFocus()
         mediaSession?.isActive = true
 
-        // TRUQUE DO BLUETOOTH: Fingimos que demos "Play" para forçar o relógio a olhar pra cá
+        // Bluetooth trick: simulate Play then Pause to force watch to sync
         updatePlaybackState(PlaybackState.STATE_PLAYING)
 
-        // E 100 milissegundos depois, voltamos silenciosamente pro "Pause"
+        // Return silently to pause state after 100 milliseconds
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             updatePlaybackState(PlaybackState.STATE_PAUSED)
         }, 100)
@@ -86,17 +87,17 @@ class MediaService : Service() {
         return START_STICKY
     }
 
-    // FUNÇÃO ADICIONADA: Onde o roubo de foco realmente acontece
+    // Handles the actual audio focus request to intercept hardware button events
     private fun requestAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener { /* Ignora se perder o foco */ }
+                .setOnAudioFocusChangeListener { /* Ignore focus loss */ }
                 .build()
             audioManager.requestAudioFocus(focusRequest)
         } else {
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
-                { /* Ignora se perder o foco */ },
+                { /* Ignore focus loss */ },
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN
             )
@@ -106,6 +107,7 @@ class MediaService : Service() {
     private fun loadAutomationsFromMemory() {
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val jsonString = sharedPrefs.getString("AUTOMATIONS_LIST", "[]")
+
         try {
             val jsonArray = JSONArray(jsonString)
             automationList.clear()
@@ -123,12 +125,10 @@ class MediaService : Service() {
 
     private fun updateWatchDisplay() {
         val title = if (automationList.isNotEmpty()) automationList[currentIndex].name else "No Automations"
-
         val metadata = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
             .putString(MediaMetadata.METADATA_KEY_ARTIST, title)
             .build()
-
         mediaSession?.setMetadata(metadata)
     }
 
@@ -136,19 +136,29 @@ class MediaService : Service() {
         if (automationList.isEmpty()) return
 
         val currentAutomation = automationList[currentIndex]
-        val urlToCall = if (isTurnOn) currentAutomation.turnOnUrl else currentAutomation.turnOffUrl
+        val commandToExecute = if (isTurnOn) currentAutomation.turnOnUrl else currentAutomation.turnOffUrl
 
-        if (urlToCall.isNotEmpty()) {
-            Thread {
-                try {
-                    val connection = java.net.URL(urlToCall).openConnection() as java.net.HttpURLConnection
-                    connection.requestMethod = "GET"
-                    Log.d("BandTrigger", "Webhook triggered: ${connection.responseCode}")
-                    connection.disconnect()
-                } catch (e: Exception) {
-                    Log.e("BandTrigger", "Error triggering webhook", e)
-                }
-            }.start()
+        if (commandToExecute.isNotEmpty()) {
+            // Check if the command is our special CAMERA keyword
+            if (commandToExecute.trim().equals("CAMERA", ignoreCase = true)) {
+                Log.d("BandTrigger", "Executing hardware command: CAMERA")
+                RemoteCameraService.instance?.triggerCameraShutter()
+            }
+            // Otherwise, treat it as a standard HTTP Webhook
+            else if (commandToExecute.startsWith("http", ignoreCase = true)) {
+                Thread {
+                    try {
+                        val connection = java.net.URL(commandToExecute).openConnection() as java.net.HttpURLConnection
+                        connection.requestMethod = "GET"
+                        Log.d("BandTrigger", "Webhook triggered: ${connection.responseCode}")
+                        connection.disconnect()
+                    } catch (e: Exception) {
+                        Log.e("BandTrigger", "Error triggering webhook", e)
+                    }
+                }.start()
+            } else {
+                Log.w("BandTrigger", "Unknown command format: $commandToExecute")
+            }
         }
     }
 
@@ -161,7 +171,6 @@ class MediaService : Service() {
                     PlaybackState.ACTION_SKIP_TO_PREVIOUS)
             .setState(state, 0, 1.0f)
             .build()
-
         mediaSession?.setPlaybackState(playbackState)
     }
 

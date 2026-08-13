@@ -1,5 +1,8 @@
 package com.bandlightconnect.app
 
+import android.provider.Settings
+import android.os.Handler
+import android.os.Looper
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
@@ -46,7 +49,38 @@ class SettingsFragment : Fragment() {
                 Toast.makeText(requireContext(), "Hijack Band Focus Disabled", Toast.LENGTH_SHORT).show()
             }
         }
+
+        // --- Hardware Controls (Camera Shutter) ---
+        val switchCameraShutter = view.findViewById<SwitchMaterial>(R.id.switchCameraShutter)
+
+        // Se o serviço estiver ativado nas configurações do Android, o switch já deve começar ligado.
+        switchCameraShutter.isChecked = RemoteCameraService.instance != null
+
+        switchCameraShutter.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // Se o usuário ligar o switch mas o serviço não estiver ativado no sistema:
+                if (RemoteCameraService.instance == null) {
+                    // Avisa o usuário e abre a tela de acessibilidade do Android direto!
+                    Toast.makeText(context, "Ative o Band Trigger para usar a câmera", Toast.LENGTH_LONG).show()
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    switchCameraShutter.isChecked = false // Mantém desligado até ele voltar com a permissão
+                } else {
+                    // --- TESTE DE FUNCIONALIDADE (Temporário para desenvolvimento) ---
+                    // Se estiver ativado, vamos testar o "click" agora para provar que funciona.
+                    // Em produção, isso seria chamado no NotificationListener.
+                    Toast.makeText(context, "Testing Remote Shutter in 3 seconds. Open your camera!", Toast.LENGTH_SHORT).show()
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        RemoteCameraService.instance?.triggerCameraShutter()
+                    }, 3000)
+                }
+            } else {
+                // Se ele desligar o switch, desativar no sistema não é fácil.
+                // O melhor é apenas "ignorar" o comando no código se o switch estiver off.
+                Toast.makeText(context, "Feature disabled.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
+
 
     // Refresh state when coming back from Android Settings
     override fun onResume() {
