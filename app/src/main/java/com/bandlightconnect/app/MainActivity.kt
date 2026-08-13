@@ -3,6 +3,7 @@ package com.bandlightconnect.app
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -36,11 +38,10 @@ class MainActivity : AppCompatActivity() {
 
         startService(Intent(this, MediaService::class.java))
 
-        val fabAdd: FloatingActionButton = findViewById(R.id.fabAdicionar)
+        val fabAdd: FloatingActionButton = findViewById(R.id.fabAdd)
         fabAdd.setOnClickListener {
             showAddAutomationDialog()
         }
-
     }
 
     // Inflate the 3-dot menu on top right
@@ -75,22 +76,21 @@ class MainActivity : AppCompatActivity() {
                             .setNegativeButton("Cancel", null)
                             .create()
 
-                        // AQUI ESTÁ A CORREÇÃO DA COR:
                         dialog.setOnShowListener {
-                            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(android.graphics.Color.WHITE)
-                            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(android.graphics.Color.WHITE)
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
+                            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
                         }
                         dialog.show()
                     } else {
                         sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", true).apply()
                         item.isChecked = true
-                        android.widget.Toast.makeText(this, "Auto-Focus Enabled", android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Auto-Focus Enabled", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     // Desativa
                     sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
                     item.isChecked = false
-                    android.widget.Toast.makeText(this, "Auto-Focus Disabled", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Auto-Focus Disabled", Toast.LENGTH_SHORT).show()
                 }
                 return true
             }
@@ -100,9 +100,18 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             R.id.action_about -> {
+                // A LÓGICA DA VERSÃO ESTÁ AQUI
+                var versionName = "Unknown"
+                try {
+                    val pInfo = packageManager.getPackageInfo(packageName, 0)
+                    versionName = pInfo.versionName ?: "Unknown"
+                } catch (e: PackageManager.NameNotFoundException) {
+                    e.printStackTrace()
+                }
+
                 AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                     .setTitle("About Band Trigger")
-                    .setMessage("Version 1.1\n\nControl your smart home automations directly from your smartwatch media controls.")
+                    .setMessage("Version $versionName\n\nControl your smart home automations directly from your smartwatch media controls.")
                     .setPositiveButton("Close", null)
                     .show()
                 return true
@@ -112,7 +121,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        val recyclerView: RecyclerView = findViewById(R.id.recyclerViewAutomacoes)
+        val recyclerView: RecyclerView = findViewById(R.id.recyclerViewAutomations)
 
         adapter = AutomationAdapter(automationList) { automation, position ->
             showAutomationDetails(automation, position)
@@ -137,7 +146,7 @@ class MainActivity : AppCompatActivity() {
                 adapter.notifyItemRemoved(position)
                 saveAutomations()
                 startService(Intent(this@MainActivity, MediaService::class.java))
-                android.widget.Toast.makeText(this@MainActivity, "Automation deleted", android.widget.Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Automation deleted", Toast.LENGTH_SHORT).show()
             }
             .create()
 
@@ -151,14 +160,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEditAutomationDialog(automation: Automation, position: Int) {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_nova_automacao, null)
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_new_automation, null)
 
         val textTitle = dialogView.findViewById<android.widget.TextView>(R.id.textDialogTitle)
         textTitle.text = "Edit Automation"
 
-        val editName = dialogView.findViewById<EditText>(R.id.editNome)
-        val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlLigar)
-        val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlDesligar)
+        val editName = dialogView.findViewById<EditText>(R.id.editName)
+        val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlTurnOn)
+        val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlTurnOff)
 
         editName.setText(automation.name)
         editUrlOn.setText(automation.turnOnUrl)
@@ -176,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                     adapter.notifyItemChanged(position)
                     saveAutomations()
                     startService(Intent(this@MainActivity, MediaService::class.java))
-                    android.widget.Toast.makeText(this@MainActivity, "Automation updated", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Automation updated", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -191,10 +200,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAddAutomationDialog() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_nova_automacao, null)
-        val editName = dialogView.findViewById<EditText>(R.id.editNome)
-        val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlLigar)
-        val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlDesligar)
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_new_automation, null)
+        val editName = dialogView.findViewById<EditText>(R.id.editName)
+        val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlTurnOn)
+        val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlTurnOff)
 
         val dialog = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setView(dialogView)
@@ -208,7 +217,7 @@ class MainActivity : AppCompatActivity() {
                     adapter.notifyItemInserted(automationList.size - 1)
                     saveAutomations()
                     startService(Intent(this@MainActivity, MediaService::class.java))
-                    android.widget.Toast.makeText(this@MainActivity, "Automation added", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Automation added", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)

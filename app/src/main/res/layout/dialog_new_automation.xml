@@ -18,7 +18,7 @@
         android:textStyle="bold" />
 
     <EditText
-        android:id="@+id/editNome"
+        android:id="@+id/editName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"
@@ -28,7 +28,7 @@
         android:textColorHint="#AAAAAA" />
 
     <EditText
-        android:id="@+id/editUrlLigar"
+        android:id="@+id/editUrlTurnOn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"
@@ -39,7 +39,7 @@
         android:textColorHint="#AAAAAA" />
 
     <EditText
-        android:id="@+id/editUrlDesligar"
+        android:id="@+id/editUrlTurnOff"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:backgroundTint="#BB86FC"
