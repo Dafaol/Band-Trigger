@@ -1,11 +1,13 @@
 # 🚀 Band Trigger
 
-🌎 *Choose your language:* [🇺🇸 English](#-english) | [🇧🇷 Português](#-português)
+🌎 *Choose your language / Escolha seu idioma:* 
+
+[![English](https://img.shields.io/badge/English-blue?style=for-the-badge)](#-english)
+[![Português](https://img.shields.io/badge/Portugu%C3%AAs-green?style=for-the-badge)](#-português)
 
 ---
 
 ## 🇺🇸 English
-
 > **Smartbands were designed to track steps and skip songs. I decided they could do more.**
 
 Band Trigger is an Android application built to give a completely new purpose to your wearable device. It intercepts media control events from your smartband and translates them into custom HTTP requests, effectively turning your simple fitness band into a powerful smart home remote.
