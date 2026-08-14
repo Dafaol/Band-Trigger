@@ -1,121 +1,82 @@
 package com.bandlightconnect.app
 
-import android.provider.Settings
-import android.os.Handler
-import android.os.Looper
-import android.app.AlertDialog
+import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.graphics.Color
+import android.content.pm.PackageManager
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.switchmaterial.SwitchMaterial
 
-class SettingsFragment : Fragment() {
+class SettingsFragment : Fragment(R.layout.fragment_settings) {
 
-    private lateinit var switchHijackFocus: SwitchMaterial
+    // --- Permission Launchers ---
+    private val requestCameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val switchCamera = requireView().findViewById<SwitchMaterial>(R.id.switchHiddenCamera)
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_settings, container, false)
+        if (isGranted) {
+            sharedPrefs.edit().putBoolean("CAMERA_ENABLED", true).apply()
+        } else {
+            switchCamera.isChecked = false
+            sharedPrefs.edit().putBoolean("CAMERA_ENABLED", false).apply()
+            Toast.makeText(requireContext(), "Camera permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val requestAudioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val switchAudio = requireView().findViewById<SwitchMaterial>(R.id.switchAudioRecorder)
+
+        if (isGranted) {
+            sharedPrefs.edit().putBoolean("AUDIO_ENABLED", true).apply()
+        } else {
+            switchAudio.isChecked = false
+            sharedPrefs.edit().putBoolean("AUDIO_ENABLED", false).apply()
+            Toast.makeText(requireContext(), "Microphone permission denied", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
 
-        switchHijackFocus = view.findViewById(R.id.switchHijackFocus)
+        val switchHiddenCamera = view.findViewById<SwitchMaterial>(R.id.switchHiddenCamera)
+        val switchAudioRecorder = view.findViewById<SwitchMaterial>(R.id.switchAudioRecorder)
 
         // Load saved state
-        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val isCurrentlyEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
-        switchHijackFocus.isChecked = isCurrentlyEnabled
+        switchHiddenCamera.isChecked = sharedPrefs.getBoolean("CAMERA_ENABLED", false)
+        switchAudioRecorder.isChecked = sharedPrefs.getBoolean("AUDIO_ENABLED", false)
 
-        // Handle Switch clicks
-        switchHijackFocus.setOnCheckedChangeListener { _, isChecked ->
+        // Camera Switch Logic
+        switchHiddenCamera.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                if (!isNotificationServiceEnabled()) {
-                    // Revert switch visually until permission is actually granted
-                    switchHijackFocus.isChecked = false
-                    showPermissionDialog()
+                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    sharedPrefs.edit().putBoolean("CAMERA_ENABLED", true).apply()
                 } else {
-                    sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", true).apply()
-                    Toast.makeText(requireContext(), "Hijack Band Focus Enabled", Toast.LENGTH_SHORT).show()
+                    // Trigger Android Permission Popup
+                    requestCameraPermission.launch(Manifest.permission.CAMERA)
                 }
             } else {
-                sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
-                Toast.makeText(requireContext(), "Hijack Band Focus Disabled", Toast.LENGTH_SHORT).show()
+                sharedPrefs.edit().putBoolean("CAMERA_ENABLED", false).apply()
             }
         }
 
-        // --- Hardware Controls (Camera Shutter) ---
-        val switchCameraShutter = view.findViewById<SwitchMaterial>(R.id.switchCameraShutter)
-
-        // Se o serviço estiver ativado nas configurações do Android, o switch já deve começar ligado.
-        switchCameraShutter.isChecked = RemoteCameraService.instance != null
-
-        switchCameraShutter.setOnCheckedChangeListener { _, isChecked ->
+        // Audio Switch Logic
+        switchAudioRecorder.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                // Se o usuário ligar o switch mas o serviço não estiver ativado no sistema:
-                if (RemoteCameraService.instance == null) {
-                    // Avisa o usuário e abre a tela de acessibilidade do Android direto!
-                    Toast.makeText(context, "Ative o Band Trigger para usar a câmera", Toast.LENGTH_LONG).show()
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    switchCameraShutter.isChecked = false // Mantém desligado até ele voltar com a permissão
+                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    sharedPrefs.edit().putBoolean("AUDIO_ENABLED", true).apply()
                 } else {
-                    // --- TESTE DE FUNCIONALIDADE (Temporário para desenvolvimento) ---
-                    // Se estiver ativado, vamos testar o "click" agora para provar que funciona.
-                    // Em produção, isso seria chamado no NotificationListener.
-                    Toast.makeText(context, "Testing Remote Shutter in 3 seconds. Open your camera!", Toast.LENGTH_SHORT).show()
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        RemoteCameraService.instance?.triggerCameraShutter()
-                    }, 3000)
+                    // Trigger Android Permission Popup
+                    requestAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
                 }
             } else {
-                // Se ele desligar o switch, desativar no sistema não é fácil.
-                // O melhor é apenas "ignorar" o comando no código se o switch estiver off.
-                Toast.makeText(context, "Feature disabled.", Toast.LENGTH_SHORT).show()
+                sharedPrefs.edit().putBoolean("AUDIO_ENABLED", false).apply()
             }
         }
-    }
-
-
-    // Refresh state when coming back from Android Settings
-    override fun onResume() {
-        super.onResume()
-        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val isCurrentlyEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
-
-        if (isCurrentlyEnabled && !isNotificationServiceEnabled()) {
-            sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
-            switchHijackFocus.isChecked = false
-        } else {
-            switchHijackFocus.isChecked = isCurrentlyEnabled
-        }
-    }
-
-    private fun isNotificationServiceEnabled(): Boolean {
-        val pkgName = requireContext().packageName
-        val flat = android.provider.Settings.Secure.getString(requireContext().contentResolver, "enabled_notification_listeners")
-        return flat?.contains(pkgName) == true
-    }
-
-    private fun showPermissionDialog() {
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Permission Required")
-            .setMessage("To use 'Hijack Band Focus', the app needs Notification Access.\n\nNote: This allows the app to intercept media pause events.")
-            .setPositiveButton("Grant Access") { _, _ ->
-                startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-            }
-            .setNegativeButton("Cancel", null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
-        }
-        dialog.show()
     }
 }

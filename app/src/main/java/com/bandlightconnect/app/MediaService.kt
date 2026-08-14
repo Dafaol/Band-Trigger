@@ -20,6 +20,9 @@ class MediaService : Service() {
     // AudioManager instance used to hijack audio focus
     private lateinit var audioManager: AudioManager
 
+    // Instância do nosso gravador de áudio
+    private val audioRecorder = AudioRecorderHelper()
+
     // Internal service list and current index
     private var automationList = mutableListOf<Automation>()
     private var currentIndex = 0
@@ -87,7 +90,6 @@ class MediaService : Service() {
         return START_STICKY
     }
 
-    // Handles the actual audio focus request to intercept hardware button events
     private fun requestAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -139,12 +141,43 @@ class MediaService : Service() {
         val commandToExecute = if (isTurnOn) currentAutomation.turnOnUrl else currentAutomation.turnOffUrl
 
         if (commandToExecute.isNotEmpty()) {
-            // Check if the command is our special CAMERA keyword
+
+            // 1. Hidden Camera Command
             if (commandToExecute.trim().equals("CAMERA", ignoreCase = true)) {
                 Log.d("BandTrigger", "Executing hardware command: CAMERA")
-                RemoteCameraService.instance?.triggerCameraShutter()
+                val intent = Intent(this, HiddenCameraActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                }
+                startActivity(intent)
+
+                // Trick: Force state back to "Paused" after 500 milliseconds
+                // The delay ensures the watch has time to process the Bluetooth change
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    updatePlaybackState(PlaybackState.STATE_PAUSED)
+                }, 500)
             }
-            // Otherwise, treat it as a standard HTTP Webhook
+
+            // 2. Comando do Gravador de Áudio
+            else if (commandToExecute.trim().equals("RECORD", ignoreCase = true)) {
+                Log.d("BandTrigger", "Executing hardware command: RECORD")
+                if (isTurnOn) {
+                    // Play apertado: Salva na pasta PÚBLICA de Músicas do Android
+                    val publicMusicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
+                    val bandTriggerDir = java.io.File(publicMusicDir, "BandTrigger")
+
+                    // Cria a pasta "BandTrigger" dentro de Músicas, se não existir
+                    if (!bandTriggerDir.exists()) {
+                        bandTriggerDir.mkdirs()
+                    }
+
+                    audioRecorder.startRecording(this, bandTriggerDir)
+                } else {
+                    // Pause apertado: Encerra a gravação
+                    audioRecorder.stopRecording()
+                }
+            }
+
+            // 3. Webhook HTTP Padrão
             else if (commandToExecute.startsWith("http", ignoreCase = true)) {
                 Thread {
                     try {
@@ -183,6 +216,7 @@ class MediaService : Service() {
         if (::audioManager.isInitialized) {
             audioManager.abandonAudioFocus { }
         }
+        audioRecorder.stopRecording() // Garante que não fique gravando ao fechar
         mediaSession?.release()
     }
 }

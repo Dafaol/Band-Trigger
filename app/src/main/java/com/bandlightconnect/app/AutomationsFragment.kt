@@ -117,20 +117,68 @@ class AutomationsFragment : Fragment() {
 
     private fun showAddAutomationDialog() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_new_automation, null)
+
         val editName = dialogView.findViewById<EditText>(R.id.editName)
         val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlTurnOn)
         val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlTurnOff)
+        val layoutUrls = dialogView.findViewById<View>(R.id.layoutUrls)
+        val dropdownAction = dialogView.findViewById<android.widget.AutoCompleteTextView>(R.id.dropdownAction)
+
+        // Lê das configurações se as funções estão ativadas (simulando preferências)
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val isCameraEnabled = sharedPrefs.getBoolean("CAMERA_ENABLED", false) // Você pode conectar isso ao seu Switch depois
+        val isAudioEnabled = sharedPrefs.getBoolean("AUDIO_ENABLED", false)
+
+        // Dropdown options
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder")
+        val enabledFlags = booleanArrayOf(true, isCameraEnabled, isAudioEnabled)
+
+        // Criando um adaptador customizado para pintar o texto de cinza se estiver desativado
+        val adapter = object : android.widget.ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = super.getView(position, convertView, parent) as android.widget.TextView
+                view.setTextColor(if (enabledFlags[position]) android.graphics.Color.WHITE else android.graphics.Color.GRAY)
+                return view
+            }
+        }
+
+        dropdownAction.setAdapter(adapter)
+        dropdownAction.setText(actionOptions[0], false) // Padrão é Webhook
+
+        dropdownAction.setOnItemClickListener { _, _, position, _ ->
+            if (!enabledFlags[position]) {
+                // Warning in English
+                Toast.makeText(requireContext(), "Enable this feature in the Settings tab first!", Toast.LENGTH_LONG).show()
+                dropdownAction.setText(actionOptions[0], false)
+                layoutUrls.visibility = View.VISIBLE
+            } else {
+                if (position == 1 || position == 2) {
+                    layoutUrls.visibility = View.GONE
+                } else {
+                    layoutUrls.visibility = View.VISIBLE
+                }
+            }
+        }
 
         val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setView(dialogView)
             .setPositiveButton("Save") { _, _ ->
                 val name = editName.text.toString()
-                val urlOn = editUrlOn.text.toString()
-                val urlOff = editUrlOff.text.toString()
+                var urlOn = editUrlOn.text.toString()
+                var urlOff = editUrlOff.text.toString()
+
+                val selectedAction = dropdownAction.text.toString()
+                if (selectedAction == "Hidden Camera") {
+                    urlOn = "CAMERA"
+                    urlOff = ""
+                } else if (selectedAction == "Audio Recorder") {
+                    urlOn = "RECORD"
+                    urlOff = "RECORD"
+                }
 
                 if (name.isNotEmpty() && urlOn.isNotEmpty()) {
                     automationList.add(Automation(name, urlOn, urlOff))
-                    adapter.notifyItemInserted(automationList.size - 1)
+                    this.adapter.notifyItemInserted(automationList.size - 1)
                     saveAutomations()
                     requireActivity().startService(Intent(requireContext(), MediaService::class.java))
                     Toast.makeText(requireContext(), "Automation added", Toast.LENGTH_SHORT).show()
@@ -140,8 +188,8 @@ class AutomationsFragment : Fragment() {
             .create()
 
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(android.graphics.Color.WHITE)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(android.graphics.Color.WHITE)
         }
         dialog.show()
     }

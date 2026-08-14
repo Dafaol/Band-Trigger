@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="#2C2C2C"
@@ -17,6 +18,24 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <!-- Lista Suspensa -->
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:boxStrokeColor="#BB86FC"
+        android:hint="Action Type"
+        android:textColorHint="#AAAAAA">
+
+        <AutoCompleteTextView
+            android:id="@+id/dropdownAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="none"
+            android:textColor="#FFFFFF" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <EditText
         android:id="@+id/editName"
         android:layout_width="match_parent"
@@ -27,25 +46,32 @@
         android:textColor="#FFFFFF"
         android:textColorHint="#AAAAAA" />
 
-    <EditText
-        android:id="@+id/editUrlTurnOn"
+    <!-- Contêiner das URLs (Esconde se for Câmera ou Áudio) -->
+    <LinearLayout
+        android:id="@+id/layoutUrls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
-        android:backgroundTint="#BB86FC"
-        android:hint="Turn On URL (Webhook)"
-        android:inputType="textUri"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#AAAAAA" />
+        android:orientation="vertical">
 
-    <EditText
-        android:id="@+id/editUrlTurnOff"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:backgroundTint="#BB86FC"
-        android:hint="Turn Off URL (Optional)"
-        android:inputType="textUri"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#AAAAAA" />
+        <EditText
+            android:id="@+id/editUrlTurnOn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#BB86FC"
+            android:hint="Turn On URL (Webhook)"
+            android:inputType="textUri"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#AAAAAA" />
 
+        <EditText
+            android:id="@+id/editUrlTurnOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#BB86FC"
+            android:hint="Turn Off URL (Optional)"
+            android:inputType="textUri"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#AAAAAA" />
+    </LinearLayout>
 </LinearLayout>
