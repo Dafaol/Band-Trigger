@@ -38,23 +38,43 @@ class MediaService : Service() {
         updateWatchDisplay()
 
         mediaSession?.setCallback(object : MediaSession.Callback() {
+
+            // Unifies Play and Pause. The app becomes the brain, the watch is just a trigger.
+            private fun handleSmartToggle() {
+                if (automationList.isEmpty()) return
+
+                val currentAutomation = automationList[currentIndex]
+                // Invert the current memory state
+                currentAutomation.isCurrentlyOn = !currentAutomation.isCurrentlyOn
+
+                if (currentAutomation.isCurrentlyOn) {
+                    Log.d("BandTrigger", "  Smart Toggle: TURN ON")
+                    updatePlaybackState(PlaybackState.STATE_PLAYING)
+                    triggerCurrentWebhook(isTurnOn = true)
+                } else {
+                    Log.d("BandTrigger", "  Smart Toggle: TURN OFF")
+                    updatePlaybackState(PlaybackState.STATE_PAUSED)
+                    triggerCurrentWebhook(isTurnOn = false)
+                }
+
+                // Force the watch text to update its [ ON ] / [ OFF ] badge
+                updateWatchDisplay()
+            }
+
             override fun onPlay() {
-                Log.d("BandTrigger", "  PLAY pressed")
-                updatePlaybackState(PlaybackState.STATE_PLAYING)
-                triggerCurrentWebhook(isTurnOn = true)
+                handleSmartToggle()
             }
 
             override fun onPause() {
-                Log.d("BandTrigger", "  PAUSE pressed")
-                updatePlaybackState(PlaybackState.STATE_PAUSED)
-                triggerCurrentWebhook(isTurnOn = false)
+                handleSmartToggle()
             }
 
             override fun onSkipToNext() {
                 if (automationList.isNotEmpty()) {
                     currentIndex = (currentIndex + 1) % automationList.size
                     updateWatchDisplay()
-                    Log.d("BandTrigger", "  NEXT -> Index: $currentIndex")
+                    val savedState = if (automationList[currentIndex].isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+                    updatePlaybackState(savedState)
                 }
             }
 
@@ -62,7 +82,8 @@ class MediaService : Service() {
                 if (automationList.isNotEmpty()) {
                     currentIndex = if (currentIndex - 1 < 0) automationList.size - 1 else currentIndex - 1
                     updateWatchDisplay()
-                    Log.d("BandTrigger", "  PREVIOUS -> Index: $currentIndex")
+                    val savedState = if (automationList[currentIndex].isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+                    updatePlaybackState(savedState)
                 }
             }
         })
@@ -126,10 +147,23 @@ class MediaService : Service() {
     }
 
     private fun updateWatchDisplay() {
-        val title = if (automationList.isNotEmpty()) automationList[currentIndex].name else "No Automations"
+        if (automationList.isEmpty()) {
+            val metadata = MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "No Automations")
+                .build()
+            mediaSession?.setMetadata(metadata)
+            return
+        }
+
+        // Add [ ON ] or [ OFF ] to the title so you always know the real state
+        val currentAutomation = automationList[currentIndex]
+        val stateText = if (currentAutomation.isCurrentlyOn) "[ ON ]" else "[ OFF ]"
+        val titleWithState = "${currentAutomation.name}  $stateText"
+
         val metadata = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, title)
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, titleWithState)
             .build()
         mediaSession?.setMetadata(metadata)
     }
@@ -151,33 +185,34 @@ class MediaService : Service() {
                 startActivity(intent)
 
                 // Trick: Force state back to "Paused" after 500 milliseconds
-                // The delay ensures the watch has time to process the Bluetooth change
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    automationList[currentIndex].isCurrentlyOn = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
+                    updateWatchDisplay() // Atualiza o texto para [ OFF ]
                 }, 500)
             }
 
-            // 2. Comando do Gravador de Áudio
+            // 2. Audio Recorder Command
             else if (commandToExecute.trim().equals("RECORD", ignoreCase = true)) {
                 Log.d("BandTrigger", "Executing hardware command: RECORD")
                 if (isTurnOn) {
-                    // Play apertado: Salva na pasta PÚBLICA de Músicas do Android
+                    // Play pressed: Save to the public Music directory
                     val publicMusicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
                     val bandTriggerDir = java.io.File(publicMusicDir, "BandTrigger")
 
-                    // Cria a pasta "BandTrigger" dentro de Músicas, se não existir
+                    // Create the "BandTrigger" folder if it doesn't exist
                     if (!bandTriggerDir.exists()) {
                         bandTriggerDir.mkdirs()
                     }
 
                     audioRecorder.startRecording(this, bandTriggerDir)
                 } else {
-                    // Pause apertado: Encerra a gravação
+                    // Pause pressed: Stop recording
                     audioRecorder.stopRecording()
                 }
             }
 
-            // 3. Webhook HTTP Padrão
+            // 3. Standard HTTP Webhook
             else if (commandToExecute.startsWith("http", ignoreCase = true)) {
                 Thread {
                     try {
@@ -191,6 +226,18 @@ class MediaService : Service() {
                 }.start()
             } else {
                 Log.w("BandTrigger", "Unknown command format: $commandToExecute")
+            }
+
+            // Check if the recently called URL belongs to the PC Media Server
+            val isPcMedia = commandToExecute.contains("playpause", ignoreCase = true)
+
+            // Apply the 500ms bounce-back trick only for stateless triggers like PC Media.
+            if (isPcMedia) {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    automationList[currentIndex].isCurrentlyOn = false
+                    updatePlaybackState(PlaybackState.STATE_PAUSED)
+                    updateWatchDisplay() // Atualiza o texto para [ OFF ]
+                }, 500)
             }
         }
     }
