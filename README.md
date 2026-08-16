@@ -9,6 +9,11 @@
 
 ## 🇺🇸 English
 
+📚 **Note:** For a detailed setup, check out specific guides:
+* [Smart Home Setup Tutorial](docs/SMART_HOME.md)
+* [PC Media Server Tutorial](docs/PC_SERVER.md)
+
+
 ### 💡 *"Smartbands were designed to track steps and skip songs. I decided they could do more."*
 
 Band Trigger is an Android application built to give a completely new purpose to your wearable device. It intercepts media control events from your smartband and translates them into custom HTTP requests and hardware commands, effectively turning your simple fitness band into a powerful smart home and device remote.
@@ -57,6 +62,10 @@ If this app helped you, please help me too!
 ---
 
 ## 🇧🇷 Português
+
+📚 **Nota:** Para guias de configuração detalhados, acesse:
+* [Tutorial para Casa Inteligente (Lâmpadas, Tomadas)](docs/SMART_HOME.md)
+* [Tutorial para Servidor de Mídia no PC](docs/PC_SERVER.md)
 
 ### 💡 *"Smartbands foram feitas para contar passos e pular músicas. Eu decidi que elas podiam fazer mais."*
 
