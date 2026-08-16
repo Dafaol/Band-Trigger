@@ -71,7 +71,7 @@ For detailed setup guides, check our documentation:
 
 If this app helped you, please help me too! 
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/dafaol)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)]((https://ko-fi.com/dafaolcreations))
 
 ---
 ---
@@ -140,4 +140,4 @@ Para guias de configuração detalhados, acesse a documentação específica:
 
 Se este aplicativo te ajudou, me ajude também!
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/dafaol)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)]((https://ko-fi.com/dafaolcreations))
