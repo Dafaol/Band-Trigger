@@ -24,7 +24,7 @@ Before creating automations, allow Sequematic to access your devices.
 1. In Sequematic, go to the top menu and click **Settings** > **Linked services**.
 2. Find the service/app that controls your bulb (e.g., Tuya Smart, Smart Life, eWeLink) and log in to link it.
 
-![Sequematic Linked Services](tutorial-images/smart-home/tutorial_sequematic_linked-services.png)
+![Sequematic Linked Services](../tutorial-images/smart-home/tutorial_sequematic_linked-services.png)
 
 > 💡 **Important Note:** Many generic smart bulb apps run on the **Tuya** or **Smart Life** system under the hood. If your specific app isn't listed, try setting up your bulb directly in the Smart Life app to ensure compatibility!
 
@@ -40,7 +40,7 @@ A "Webhook" is a custom URL. When Band Trigger accesses this URL, it triggers a 
 4. Choose **Webhook**, then **Custom webhook**, and click **Save**.
 5. Sequematic will generate a unique URL for you (e.g., `https://sequematic.com/trigger/...`). **Copy this URL!**
 
-![Sequematic Webhook Screen](tutorial-images/smart-home/tutorial_sequematic_link-web-hook.png)
+![Sequematic Webhook Screen](../tutorial-images/smart-home/tutorial_sequematic_link-web-hook.png)
 
 ---
 
@@ -54,7 +54,7 @@ Now, configure Sequematic to act when that link is triggered.
    *(Note: Sequematic also lists what you create in the app; for instance, with the Smart Life app, the scenes you create appear there, and you can control those scenes as well).*
 4. Click **Save** at the bottom of the page to store your sequence.
 
-![Sequematic Configured Automation](tutorial-images/smart-home/tutorial_sequematic_configured-automation.png)
+![Sequematic Configured Automation](../tutorial-images/smart-home/tutorial_sequematic_configured-automation.png)
 
 *(Tip: Since we need one action to turn on and another to turn off, repeat Steps 2 and 3 creating a **new sequence** with the name "Turn Off Bedroom Light" and the "Turn Off" action. This will generate a second, unique link for turning it off).*
 
@@ -74,7 +74,7 @@ Insert the magic links into the app.
 
 | Automations Menu | New Automation |
 | :---: | :---: |
-| ![Automations Menu](tutorial-images/smart-home/tutorial_band_trigger_automation-menu.png) | ![New Automation](tutorial-images/smart-home/tutorial_band_trigger_new-automation.png) |
+| ![Automations Menu](../tutorial-images/smart-home/tutorial_band_trigger_automation-menu.png) | ![New Automation](../tutorial-images/smart-home/tutorial_band_trigger_new-automation.png) |
 
 ---
 
@@ -86,7 +86,7 @@ Insert the magic links into the app.
 4. The app will silently trigger the link alternating between "ON" and "OFF", Sequematic will catch it, and your light will turn on or off!
 
 <p align="center">
-  <img src="tutorial-images/smart-home/tutorial_band_trigger_galaxy-fit-3.png" width="400" />
+  <img src="../tutorial-images/smart-home/tutorial_band_trigger_galaxy-fit-3.png" width="400" />
 </p>
 
 ---
@@ -110,7 +110,7 @@ Antes de criar a automação, é preciso dar permissão para o Sequematic acessa
 1. No Sequematic, vá até o menu superior e clique em **Settings** > **Linked services**.
 2. Encontre o aplicativo que controla sua lâmpada (Ex: Tuya Smart, Smart Life, eWeLink) e faça o login para vinculá-lo.
 
-![Tela de Linked Services](tutorial-images/smart-home/tutorial_sequematic_linked-services.png)
+![Tela de Linked Services](../tutorial-images/smart-home/tutorial_sequematic_linked-services.png)
 
 > 💡 **Nota Importante:** Muitos aplicativos de lâmpadas genéricas usam o sistema da **Tuya** ou **Smart Life** por baixo dos panos. Se o app específico da sua lâmpada não estiver na lista do Sequematic, configure sua lâmpada diretamente pelo app Smart Life no celular para garantir a compatibilidade!
 
@@ -126,7 +126,7 @@ Um "Webhook" é um link (URL) que, quando acessado pelo Band Trigger, aciona um 
 4. Escolha a opção **Webhook**, depois **Custom webhook** e clique em **Save**.
 5. O Sequematic vai gerar uma URL única para você (algo como `https://sequematic.com/trigger/...`). **Copie essa URL!**
 
-![Tela do Webhook no Sequematic](tutorial-images/smart-home/tutorial_sequematic_link-web-hook.png)
+![Tela do Webhook no Sequematic](../tutorial-images/smart-home/tutorial_sequematic_link-web-hook.png)
 
 ---
 
@@ -140,7 +140,7 @@ Agora, configure o Sequematic para agir quando esse link for acionado.
    *(Nota: O Sequematic também lista o que você criar dentro do app. No caso do app Smart Life, as cenas que você criar aparecerão ali e você poderá controlá-las também).*
 4. Clique em **Save** (Salvar) no final da página para guardar sua sequência.
 
-![Automação Configurada no Sequematic](tutorial-images/smart-home/tutorial_sequematic_configured-automation.png)
+![Automação Configurada no Sequematic](../tutorial-images/smart-home/tutorial_sequematic_configured-automation.png)
 
 *(Dica: Como precisamos de uma ação para ligar e outra para desligar, repita os Passos 2 e 3 criando uma **nova sequência** no Sequematic com o nome "Desligar Lâmpada Quarto" e selecionando a ação "Turn Off". Isso gerará um segundo link exclusivo para desligar).*
 
@@ -160,7 +160,7 @@ Insira os links mágicos dentro do aplicativo.
 
 | Menu de Automações | Nova Automação |
 | :---: | :---: |
-| ![Menu de Automações](tutorial-images/smart-home/tutorial_band_trigger_automation-menu.png) | ![Nova Automação](tutorial-images/smart-home/tutorial_band_trigger_new-automation.png) |
+| ![Menu de Automações](../tutorial-images/smart-home/tutorial_band_trigger_automation-menu.png) | ![Nova Automação](../tutorial-images/smart-home/tutorial_band_trigger_new-automation.png) |
 
 ---
 
@@ -172,5 +172,5 @@ Insira os links mágicos dentro do aplicativo.
 4. O app vai acessar o link silenciosamente alternando entre o "ON" e o "OFF", o Sequematic vai receber o aviso e a sua luz vai acender ou apagar!
 
 <p align="center">
-  <img src="tutorial-images/smart-home/tutorial_band_trigger_galaxy-fit-3.png" width="400" />
+  <img src="../tutorial-images/smart-home/tutorial_band_trigger_galaxy-fit-3.png" width="400" />
 </p>
