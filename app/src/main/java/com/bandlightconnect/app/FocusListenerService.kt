@@ -25,37 +25,34 @@ class FocusListenerService : NotificationListenerService() {
     private fun checkIfMediaPaused(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
-        // 1. Verifica se o usuário ligou a opção no menu
+        // 1. Verify if user enabled auto-focus hijack
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val isEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
         if (!isEnabled) return
 
-        // 2. Ignora o nosso próprio aplicativo para não criar um loop fantasma
+        // 2. Ignore our own package to prevent loopback
         if (sbn.packageName == packageName) return
 
-        // 3. Procura pelo Token Universal de Mídia (funciona para Spotify, ReVanced, etc.)
+        // 3. Search for media token in notification extras
         val extras = sbn.notification.extras
         val token = extras.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
-
         if (token != null) {
             try {
                 val controller = MediaController(this, token)
                 val state = controller.playbackState?.state
 
-                // 4. Se a mídia universal estiver pausada, damos a "carteirada"
+                // 4. If third-party media is paused, reclaim smartband focus
                 if (state == PlaybackState.STATE_PAUSED) {
-                    Log.d("BandTrigger", "Mídia pausada pelo app: ${sbn.packageName}. Roubando o foco!")
-
-                    // Dispara um comando para o MediaService acordar e retomar o controle do relógio
+                    Log.d("BandTrigger", "Media paused by: ${sbn.packageName}. Reclaiming watch focus!")
                     val intent = Intent(this, MediaService::class.java)
                     try {
                         startService(intent)
                     } catch (e: Exception) {
-                        Log.e("BandTrigger", "Erro ao iniciar o serviço de mídia", e)
+                        Log.e("BandTrigger", "Error starting MediaService", e)
                     }
                 }
             } catch (e: Exception) {
-                Log.e("BandTrigger", "Erro ao ler o status da mídia", e)
+                Log.e("BandTrigger", "Error reading playback state", e)
             }
         }
     }

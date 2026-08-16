@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -15,16 +16,14 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Locale
-import androidx.appcompat.app.AppCompatActivity
 
-class HiddenCameraActivity : androidx.activity.ComponentActivity() {
+class HiddenCameraActivity : ComponentActivity() {
 
     private var imageCapture: ImageCapture? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Não carregamos nenhum layout (setContentView) para ela ser invisível
-
+        // No layout loaded to keep the activity completely invisible
         if (allPermissionsGranted()) {
             startCamera()
         } else {
@@ -34,18 +33,16 @@ class HiddenCameraActivity : androidx.activity.ComponentActivity() {
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             imageCapture = ImageCapture.Builder().build()
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture)
-                takePhoto() // Tira a foto assim que a câmera carrega
+                takePhoto() // Take picture as soon as camera is bound
             } catch(exc: Exception) {
-                Log.e("BandTrigger", "Falha ao iniciar câmera", exc)
+                Log.e("BandTrigger", "Failed to start camera", exc)
                 finish()
             }
         }, ContextCompat.getMainExecutor(this))
@@ -53,8 +50,6 @@ class HiddenCameraActivity : androidx.activity.ComponentActivity() {
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-
-        // Cria o nome do arquivo com a data/hora atual
         val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -71,13 +66,13 @@ class HiddenCameraActivity : androidx.activity.ComponentActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exc: ImageCaptureException) {
-                    Log.e("BandTrigger", "Erro ao tirar foto: ${exc.message}", exc)
+                    Log.e("BandTrigger", "Error capturing photo: ${exc.message}", exc)
                     finish()
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    Toast.makeText(baseContext, "Foto salva na Galeria!", Toast.LENGTH_SHORT).show()
-                    finish() // Fecha a tela invisível imediatamente após salvar
+                    Toast.makeText(baseContext, "Photo saved to Gallery!", Toast.LENGTH_SHORT).show()
+                    finish() // Close immediately after saving
                 }
             }
         )
@@ -92,7 +87,7 @@ class HiddenCameraActivity : androidx.activity.ComponentActivity() {
             if (allPermissionsGranted()) {
                 startCamera()
             } else {
-                Toast.makeText(this, "Permissão de câmera é necessária.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Camera permission is required.", Toast.LENGTH_LONG).show()
                 finish()
             }
         }
