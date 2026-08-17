@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#2C2C2C"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- Título Destacado em Roxo -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="Select Action"
+        android:textColor="#BB86FC"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <!-- Opção 1: Add Automation -->
+    <TextView
+        android:id="@+id/optionAddAutomation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingVertical="16dp"
+        android:text="Add Automation"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
+
+    <!-- Linha Separadora Sutil -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#444444" />
+
+    <!-- Opção 2: Create Folder -->
+    <TextView
+        android:id="@+id/optionCreateFolder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingVertical="16dp"
+        android:text="Create Folder"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
+
+</LinearLayout>

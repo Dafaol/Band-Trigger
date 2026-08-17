@@ -94,6 +94,16 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 sharedPrefs.edit().putBoolean("AUDIO_ENABLED", false).apply()
             }
         }
+
+        // Configuração do botão de sair
+        val btnExitApp = view.findViewById<View>(R.id.btnExitApp)
+        btnExitApp.setOnClickListener {
+            // 1. Para o serviço de mídia em segundo plano (devolve o controle ao Android)
+            requireContext().stopService(Intent(requireContext(), MediaService::class.java))
+
+            // 2. Fecha o aplicativo completamente
+            requireActivity().finishAffinity()
+        }
     }
 
     override fun onResume() {

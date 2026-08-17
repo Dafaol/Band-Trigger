@@ -16,74 +16,49 @@ import org.json.JSONArray
 class MediaService : Service() {
 
     private var mediaSession: MediaSession? = null
-
-    // AudioManager instance used to hijack audio focus
     private lateinit var audioManager: AudioManager
-
-    // Instância do nosso gravador de áudio
     private val audioRecorder = AudioRecorderHelper()
 
-    // Internal service list and current index
-    private var automationList = mutableListOf<Automation>()
+    private val foldersList = mutableListOf<Folder>()
+    private val automationList = mutableListOf<Automation>()
+
+    private var currentFolderId: String? = null
+    private val activeDisplayList = mutableListOf<BandDisplayItem>()
     private var currentIndex = 0
+
+    sealed class BandDisplayItem {
+        data class FolderItem(val folder: Folder) : BandDisplayItem()
+        data class AutomationItem(val automation: Automation) : BandDisplayItem()
+        object BackItem : BandDisplayItem()
+    }
 
     override fun onCreate() {
         super.onCreate()
-
-        // Initialize AudioManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
         mediaSession = MediaSession(this, "BandTriggerSession")
+
         loadAutomationsFromMemory()
-        updateWatchDisplay()
+        rebuildDisplayList()
 
         mediaSession?.setCallback(object : MediaSession.Callback() {
-
-            // Unifies Play and Pause. The app becomes the brain, the watch is just a trigger.
-            private fun handleSmartToggle() {
-                if (automationList.isEmpty()) return
-
-                val currentAutomation = automationList[currentIndex]
-                // Invert the current memory state
-                currentAutomation.isCurrentlyOn = !currentAutomation.isCurrentlyOn
-
-                if (currentAutomation.isCurrentlyOn) {
-                    Log.d("BandTrigger", "  Smart Toggle: TURN ON")
-                    updatePlaybackState(PlaybackState.STATE_PLAYING)
-                    triggerCurrentWebhook(isTurnOn = true)
-                } else {
-                    Log.d("BandTrigger", "  Smart Toggle: TURN OFF")
-                    updatePlaybackState(PlaybackState.STATE_PAUSED)
-                    triggerCurrentWebhook(isTurnOn = false)
-                }
-
-                // Force the watch text to update its [ ON ] / [ OFF ] badge
-                updateWatchDisplay()
-            }
-
             override fun onPlay() {
-                handleSmartToggle()
+                handlePlayPause()
             }
-
             override fun onPause() {
-                handleSmartToggle()
+                handlePlayPause()
             }
-
             override fun onSkipToNext() {
-                if (automationList.isNotEmpty()) {
-                    currentIndex = (currentIndex + 1) % automationList.size
+                if (activeDisplayList.isNotEmpty()) {
+                    currentIndex = (currentIndex + 1) % activeDisplayList.size
                     updateWatchDisplay()
-                    val savedState = if (automationList[currentIndex].isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
-                    updatePlaybackState(savedState)
+                    syncPlaybackStateForCurrentItem()
                 }
             }
-
             override fun onSkipToPrevious() {
-                if (automationList.isNotEmpty()) {
-                    currentIndex = if (currentIndex - 1 < 0) automationList.size - 1 else currentIndex - 1
+                if (activeDisplayList.isNotEmpty()) {
+                    currentIndex = if (currentIndex - 1 < 0) activeDisplayList.size - 1 else currentIndex - 1
                     updateWatchDisplay()
-                    val savedState = if (automationList[currentIndex].isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
-                    updatePlaybackState(savedState)
+                    syncPlaybackStateForCurrentItem()
                 }
             }
         })
@@ -94,16 +69,12 @@ class MediaService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         loadAutomationsFromMemory()
-        updateWatchDisplay()
+        rebuildDisplayList()
 
-        // Request audio focus to hijack media controls
         requestAudioFocus()
         mediaSession?.isActive = true
 
-        // Bluetooth trick: simulate Play then Pause to force watch to sync
         updatePlaybackState(PlaybackState.STATE_PLAYING)
-
-        // Return silently to pause state after 100 milliseconds
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             updatePlaybackState(PlaybackState.STATE_PAUSED)
         }, 100)
@@ -114,40 +85,103 @@ class MediaService : Service() {
     private fun requestAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener { /* Ignore focus loss */ }
+                .setOnAudioFocusChangeListener { }
                 .build()
             audioManager.requestAudioFocus(focusRequest)
         } else {
             @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(
-                { /* Ignore focus loss */ },
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN
-            )
+            audioManager.requestAudioFocus({ }, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
         }
     }
 
     private fun loadAutomationsFromMemory() {
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val jsonString = sharedPrefs.getString("AUTOMATIONS_LIST", "[]")
 
+        foldersList.clear()
         try {
-            val jsonArray = JSONArray(jsonString)
-            automationList.clear()
+            val fArray = JSONArray(sharedPrefs.getString("FOLDERS_LIST", "[]"))
+            for (i in 0 until fArray.length()) {
+                val obj = fArray.getJSONObject(i)
+                foldersList.add(Folder(id = obj.getString("id"), name = obj.getString("name")))
+            }
+        } catch (e: Exception) { Log.e("BandTrigger", "Error loading folders", e) }
+
+        automationList.clear()
+        try {
+            val jsonArray = JSONArray(sharedPrefs.getString("AUTOMATIONS_LIST", "[]"))
             for (i in 0 until jsonArray.length()) {
                 val jsonObject = jsonArray.getJSONObject(i)
                 val name = jsonObject.getString("name")
                 val urlOn = jsonObject.getString("turnOnUrl")
                 val urlOff = jsonObject.getString("turnOffUrl")
-                automationList.add(Automation(name, urlOn, urlOff))
+                val folderId = if (jsonObject.has("folderId") && !jsonObject.isNull("folderId")) jsonObject.getString("folderId") else null
+                val isCurrentlyOn = jsonObject.optBoolean("isCurrentlyOn", false)
+                automationList.add(Automation(name = name, turnOnUrl = urlOn, turnOffUrl = urlOff, isCurrentlyOn = isCurrentlyOn, folderId = folderId))
             }
-        } catch (e: Exception) {
-            Log.e("BandTrigger", "Error loading automations", e)
+        } catch (e: Exception) { Log.e("BandTrigger", "Error loading automations", e) }
+    }
+
+    private fun rebuildDisplayList() {
+        activeDisplayList.clear()
+        if (currentFolderId == null) {
+            foldersList.forEach { activeDisplayList.add(BandDisplayItem.FolderItem(it)) }
+            automationList.filter { it.folderId == null }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
+        } else {
+            activeDisplayList.add(BandDisplayItem.BackItem)
+            automationList.filter { it.folderId == currentFolderId }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
+        }
+
+        if (currentIndex >= activeDisplayList.size) currentIndex = 0
+        updateWatchDisplay()
+    }
+
+    private fun handlePlayPause() {
+        if (activeDisplayList.isEmpty()) return
+
+        when (val item = activeDisplayList[currentIndex]) {
+            is BandDisplayItem.BackItem -> {
+                currentFolderId = null
+                currentIndex = 0
+                rebuildDisplayList()
+                updatePlaybackState(PlaybackState.STATE_PAUSED)
+            }
+            is BandDisplayItem.FolderItem -> {
+                currentFolderId = item.folder.id
+                currentIndex = 0
+                rebuildDisplayList()
+                updatePlaybackState(PlaybackState.STATE_PAUSED)
+            }
+            is BandDisplayItem.AutomationItem -> {
+                val currentAutomation = item.automation
+                currentAutomation.isCurrentlyOn = !currentAutomation.isCurrentlyOn
+
+                if (currentAutomation.isCurrentlyOn) {
+                    Log.d("BandTrigger", "Smart Toggle: TURN ON")
+                    updatePlaybackState(PlaybackState.STATE_PLAYING)
+                    triggerCurrentWebhook(currentAutomation, isTurnOn = true)
+                } else {
+                    Log.d("BandTrigger", "Smart Toggle: TURN OFF")
+                    updatePlaybackState(PlaybackState.STATE_PAUSED)
+                    triggerCurrentWebhook(currentAutomation, isTurnOn = false)
+                }
+                updateWatchDisplay()
+            }
+        }
+    }
+
+    private fun syncPlaybackStateForCurrentItem() {
+        if (activeDisplayList.isEmpty()) return
+        when (val item = activeDisplayList[currentIndex]) {
+            is BandDisplayItem.AutomationItem -> {
+                val state = if (item.automation.isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+                updatePlaybackState(state)
+            }
+            else -> updatePlaybackState(PlaybackState.STATE_PAUSED)
         }
     }
 
     private fun updateWatchDisplay() {
-        if (automationList.isEmpty()) {
+        if (activeDisplayList.isEmpty()) {
             val metadata = MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, "No Automations")
@@ -156,87 +190,78 @@ class MediaService : Service() {
             return
         }
 
-        // Add [ ON ] or [ OFF ] to the title so you always know the real state
-        val currentAutomation = automationList[currentIndex]
-        val stateText = if (currentAutomation.isCurrentlyOn) "[ ON ]" else "[ OFF ]"
-        val titleWithState = "${currentAutomation.name}  $stateText"
-
-        val metadata = MediaMetadata.Builder()
-            .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, titleWithState)
-            .build()
-        mediaSession?.setMetadata(metadata)
+        when (val item = activeDisplayList[currentIndex]) {
+            is BandDisplayItem.BackItem -> {
+                val metadata = MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ ⬅️ Back / Raiz ]")
+                    .build()
+                mediaSession?.setMetadata(metadata)
+            }
+            is BandDisplayItem.FolderItem -> {
+                val metadata = MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 📁 ${item.folder.name} ]")
+                    .build()
+                mediaSession?.setMetadata(metadata)
+            }
+            is BandDisplayItem.AutomationItem -> {
+                val stateText = if (item.automation.isCurrentlyOn) "[ ON ]" else "[ OFF ]"
+                val titleWithState = "${item.automation.name}  $stateText"
+                val metadata = MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, titleWithState)
+                    .build()
+                mediaSession?.setMetadata(metadata)
+            }
+        }
     }
 
-    private fun triggerCurrentWebhook(isTurnOn: Boolean) {
-        if (automationList.isEmpty()) return
-
-        val currentAutomation = automationList[currentIndex]
-        val commandToExecute = if (isTurnOn) currentAutomation.turnOnUrl else currentAutomation.turnOffUrl
+    private fun triggerCurrentWebhook(automation: Automation, isTurnOn: Boolean) {
+        val commandToExecute = if (isTurnOn) automation.turnOnUrl else automation.turnOffUrl
 
         if (commandToExecute.isNotEmpty()) {
-
-            // 1. Hidden Camera Command
             if (commandToExecute.trim().equals("CAMERA", ignoreCase = true)) {
-                Log.d("BandTrigger", "Executing hardware command: CAMERA")
                 val intent = Intent(this, HiddenCameraActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 }
                 startActivity(intent)
 
-                // Trick: Force state back to "Paused" after 500 milliseconds
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    automationList[currentIndex].isCurrentlyOn = false
+                    automation.isCurrentlyOn = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
-                    updateWatchDisplay() // Atualiza o texto para [ OFF ]
+                    updateWatchDisplay()
                 }, 500)
             }
-
-            // 2. Audio Recorder Command
             else if (commandToExecute.trim().equals("RECORD", ignoreCase = true)) {
-                Log.d("BandTrigger", "Executing hardware command: RECORD")
                 if (isTurnOn) {
-                    // Play pressed: Save to the public Music directory
                     val publicMusicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
                     val bandTriggerDir = java.io.File(publicMusicDir, "BandTrigger")
-
-                    // Create the "BandTrigger" folder if it doesn't exist
-                    if (!bandTriggerDir.exists()) {
-                        bandTriggerDir.mkdirs()
-                    }
-
+                    if (!bandTriggerDir.exists()) bandTriggerDir.mkdirs()
                     audioRecorder.startRecording(this, bandTriggerDir)
                 } else {
-                    // Pause pressed: Stop recording
                     audioRecorder.stopRecording()
                 }
             }
-
-            // 3. Standard HTTP Webhook
             else if (commandToExecute.startsWith("http", ignoreCase = true)) {
                 Thread {
                     try {
                         val connection = java.net.URL(commandToExecute).openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "GET"
-                        Log.d("BandTrigger", "Webhook triggered: ${connection.responseCode}")
+                        connection.responseCode
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e("BandTrigger", "Error triggering webhook", e)
                     }
                 }.start()
-            } else {
-                Log.w("BandTrigger", "Unknown command format: $commandToExecute")
             }
 
-            // Check if the recently called URL belongs to the PC Media Server
             val isPcMedia = commandToExecute.contains("playpause", ignoreCase = true)
-
-            // Apply the 500ms bounce-back trick only for stateless triggers like PC Media.
             if (isPcMedia) {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    automationList[currentIndex].isCurrentlyOn = false
+                    automation.isCurrentlyOn = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
-                    updateWatchDisplay() // Atualiza o texto para [ OFF ]
+                    updateWatchDisplay()
                 }, 500)
             }
         }
@@ -244,26 +269,20 @@ class MediaService : Service() {
 
     private fun updatePlaybackState(state: Int) {
         val playbackState = PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PLAY or
-                    PlaybackState.ACTION_PAUSE or
-                    PlaybackState.ACTION_PLAY_PAUSE or
-                    PlaybackState.ACTION_SKIP_TO_NEXT or
+            .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+                    PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or
                     PlaybackState.ACTION_SKIP_TO_PREVIOUS)
             .setState(state, 0, 1.0f)
             .build()
         mediaSession?.setPlaybackState(playbackState)
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::audioManager.isInitialized) {
-            audioManager.abandonAudioFocus { }
-        }
-        audioRecorder.stopRecording() // Garante que não fique gravando ao fechar
+        if (::audioManager.isInitialized) audioManager.abandonAudioFocus { }
+        audioRecorder.stopRecording()
         mediaSession?.release()
     }
 }
