@@ -12,8 +12,8 @@ android {
         applicationId = "com.bandlightconnect.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 6
-        versionName = "1.4.1"
+        versionCode = 7
+        versionName = "1.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
