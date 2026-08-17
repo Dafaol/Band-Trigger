@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import org.json.JSONArray
+import java.util.UUID
 
 class MediaService : Service() {
 
@@ -110,25 +111,68 @@ class MediaService : Service() {
         try {
             val jsonArray = JSONArray(sharedPrefs.getString("AUTOMATIONS_LIST", "[]"))
             for (i in 0 until jsonArray.length()) {
-                val jsonObject = jsonArray.getJSONObject(i)
-                val name = jsonObject.getString("name")
-                val urlOn = jsonObject.getString("turnOnUrl")
-                val urlOff = jsonObject.getString("turnOffUrl")
-                val folderId = if (jsonObject.has("folderId") && !jsonObject.isNull("folderId")) jsonObject.getString("folderId") else null
-                val isCurrentlyOn = jsonObject.optBoolean("isCurrentlyOn", false)
-                automationList.add(Automation(name = name, turnOnUrl = urlOn, turnOffUrl = urlOff, isCurrentlyOn = isCurrentlyOn, folderId = folderId))
+                val obj = jsonArray.getJSONObject(i)
+
+                val id = obj.optString("id", UUID.randomUUID().toString())
+                val name = obj.getString("name")
+                val type = obj.optString("type", "WEBHOOK")
+                val webhookUrlOn = obj.optString("webhookUrlOn", "")
+                val webhookUrlOff = obj.optString("webhookUrlOff", "")
+                val isToggle = obj.optBoolean("isToggle", false)
+                val currentState = obj.optBoolean("currentState", false)
+                val folderId = if (obj.has("folderId") && !obj.isNull("folderId")) obj.getString("folderId") else null
+
+                automationList.add(Automation(
+                    id = id,
+                    name = name,
+                    type = type,
+                    webhookUrlOn = webhookUrlOn,
+                    webhookUrlOff = webhookUrlOff,
+                    isToggle = isToggle,
+                    currentState = currentState,
+                    folderId = folderId
+                ))
             }
         } catch (e: Exception) { Log.e("BandTrigger", "Error loading automations", e) }
     }
 
     private fun rebuildDisplayList() {
         activeDisplayList.clear()
+
         if (currentFolderId == null) {
-            foldersList.forEach { activeDisplayList.add(BandDisplayItem.FolderItem(it)) }
-            automationList.filter { it.folderId == null }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
+            // Se estiver na Raiz, carrega a exata ordem misturada do App!
+            val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+            val orderArrayStr = sharedPrefs.getString("ROOT_UI_ORDER", "[]")
+            val orderArray = JSONArray(orderArrayStr)
+            val addedIds = mutableSetOf<String>()
+
+            for (i in 0 until orderArray.length()) {
+                val idStr = orderArray.getString(i)
+                if (idStr.startsWith("FOLDER_")) {
+                    val fId = idStr.removePrefix("FOLDER_")
+                    val folder = foldersList.find { it.id == fId }
+                    if (folder != null) {
+                        activeDisplayList.add(BandDisplayItem.FolderItem(folder))
+                        addedIds.add(fId)
+                    }
+                } else if (idStr.startsWith("AUTO_")) {
+                    val aId = idStr.removePrefix("AUTO_")
+                    val auto = automationList.find { it.id == aId }
+                    if (auto != null && auto.folderId == null) {
+                        activeDisplayList.add(BandDisplayItem.AutomationItem(auto))
+                        addedIds.add(aId)
+                    }
+                }
+            }
+            foldersList.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.FolderItem(it)) }
+            automationList.filter { it.folderId == null }.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
+
         } else {
-            activeDisplayList.add(BandDisplayItem.BackItem)
+            // Se estiver dentro de uma pasta:
+            // 1. Mostra as automações primeiro
             automationList.filter { it.folderId == currentFolderId }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
+            // 2. Coloca o Botão de Voltar ("Sair Pasta") como o ÚLTIMO item!
+            activeDisplayList.add(BandDisplayItem.BackItem)
         }
 
         if (currentIndex >= activeDisplayList.size) currentIndex = 0
@@ -153,9 +197,9 @@ class MediaService : Service() {
             }
             is BandDisplayItem.AutomationItem -> {
                 val currentAutomation = item.automation
-                currentAutomation.isCurrentlyOn = !currentAutomation.isCurrentlyOn
+                currentAutomation.currentState = !currentAutomation.currentState
 
-                if (currentAutomation.isCurrentlyOn) {
+                if (currentAutomation.currentState) {
                     Log.d("BandTrigger", "Smart Toggle: TURN ON")
                     updatePlaybackState(PlaybackState.STATE_PLAYING)
                     triggerCurrentWebhook(currentAutomation, isTurnOn = true)
@@ -173,7 +217,7 @@ class MediaService : Service() {
         if (activeDisplayList.isEmpty()) return
         when (val item = activeDisplayList[currentIndex]) {
             is BandDisplayItem.AutomationItem -> {
-                val state = if (item.automation.isCurrentlyOn) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+                val state = if (item.automation.currentState) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
                 updatePlaybackState(state)
             }
             else -> updatePlaybackState(PlaybackState.STATE_PAUSED)
@@ -194,7 +238,7 @@ class MediaService : Service() {
             is BandDisplayItem.BackItem -> {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ ⬅️ Back / Raiz ]")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 🏠 Exit Folder ]")
                     .build()
                 mediaSession?.setMetadata(metadata)
             }
@@ -206,7 +250,11 @@ class MediaService : Service() {
                 mediaSession?.setMetadata(metadata)
             }
             is BandDisplayItem.AutomationItem -> {
-                val stateText = if (item.automation.isCurrentlyOn) "[ ON ]" else "[ OFF ]"
+                val stateText = if (item.automation.isToggle) {
+                    if (item.automation.currentState) "[ ON ]" else "[ OFF ]"
+                } else {
+                    "[ TRIGGER ]"
+                }
                 val titleWithState = "${item.automation.name}  $stateText"
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
@@ -218,22 +266,22 @@ class MediaService : Service() {
     }
 
     private fun triggerCurrentWebhook(automation: Automation, isTurnOn: Boolean) {
-        val commandToExecute = if (isTurnOn) automation.turnOnUrl else automation.turnOffUrl
+        val commandToExecute = if (isTurnOn) automation.webhookUrlOn else automation.webhookUrlOff
 
         if (commandToExecute.isNotEmpty()) {
-            if (commandToExecute.trim().equals("CAMERA", ignoreCase = true)) {
+            if (automation.type.equals("CAMERA", ignoreCase = true)) {
                 val intent = Intent(this, HiddenCameraActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 }
                 startActivity(intent)
 
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    automation.isCurrentlyOn = false
+                    automation.currentState = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
                     updateWatchDisplay()
                 }, 500)
             }
-            else if (commandToExecute.trim().equals("RECORD", ignoreCase = true)) {
+            else if (automation.type.equals("AUDIO", ignoreCase = true)) {
                 if (isTurnOn) {
                     val publicMusicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
                     val bandTriggerDir = java.io.File(publicMusicDir, "BandTrigger")
@@ -243,7 +291,7 @@ class MediaService : Service() {
                     audioRecorder.stopRecording()
                 }
             }
-            else if (commandToExecute.startsWith("http", ignoreCase = true)) {
+            else if (automation.type.equals("WEBHOOK", ignoreCase = true) || automation.type.equals("PC_MEDIA", ignoreCase = true)) {
                 Thread {
                     try {
                         val connection = java.net.URL(commandToExecute).openConnection() as java.net.HttpURLConnection
@@ -256,10 +304,10 @@ class MediaService : Service() {
                 }.start()
             }
 
-            val isPcMedia = commandToExecute.contains("playpause", ignoreCase = true)
-            if (isPcMedia) {
+            val isPcMedia = automation.type.equals("PC_MEDIA", ignoreCase = true)
+            if (isPcMedia || !automation.isToggle) {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    automation.isCurrentlyOn = false
+                    automation.currentState = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
                     updateWatchDisplay()
                 }, 500)

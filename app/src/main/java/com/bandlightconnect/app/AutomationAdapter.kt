@@ -3,57 +3,97 @@ package com.bandlightconnect.app
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Collections
 
+sealed class UiItem {
+    data class FolderItem(val folder: Folder) : UiItem()
+    data class AutomationItem(val automation: Automation) : UiItem()
+}
+
 class AutomationAdapter(
-    private val automationList: MutableList<Automation>,
-    private val foldersMap: Map<String, String>,
-    private val onItemClicked: (Automation, Int) -> Unit,
-    private val onListChanged: () -> Unit
-) : RecyclerView.Adapter<AutomationAdapter.AutomationViewHolder>() {
+    private var items: MutableList<UiItem>,
+    private val onFolderClicked: (Folder) -> Unit,
+    private val onFolderEditClicked: (Folder) -> Unit,
+    private val onAutomationClicked: (Automation) -> Unit,
+    private val onListReordered: () -> Unit
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    class AutomationViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val textName: TextView = itemView.findViewById(R.id.textNomeAutomacao)
-        val textFolder: TextView = itemView.findViewById(R.id.textFolderName)
+    companion object {
+        const val TYPE_FOLDER = 1
+        const val TYPE_AUTOMATION = 2
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AutomationViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_automacao, parent, false)
-        return AutomationViewHolder(view)
+    override fun getItemViewType(position: Int): Int {
+        return when (items[position]) {
+            is UiItem.FolderItem -> TYPE_FOLDER
+            is UiItem.AutomationItem -> TYPE_AUTOMATION
+        }
     }
 
-    override fun onBindViewHolder(holder: AutomationViewHolder, position: Int) {
-        val currentItem = automationList[position]
-        holder.textName.text = currentItem.name
-
-        if (currentItem.folderId != null && foldersMap.containsKey(currentItem.folderId)) {
-            holder.textFolder.visibility = View.VISIBLE
-            holder.textFolder.text = "📁 ${foldersMap[currentItem.folderId]}"
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return if (viewType == TYPE_FOLDER) {
+            FolderViewHolder(inflater.inflate(R.layout.item_folder, parent, false))
         } else {
-            holder.textFolder.visibility = View.GONE
-        }
-
-        holder.itemView.setOnClickListener {
-            onItemClicked(currentItem, holder.adapterPosition)
+            AutomationViewHolder(inflater.inflate(R.layout.item_automacao, parent, false))
         }
     }
 
-    override fun getItemCount(): Int = automationList.size
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val item = items[position]) {
+            is UiItem.FolderItem -> {
+                val folderHolder = holder as FolderViewHolder
+                folderHolder.textName.text = item.folder.name
 
-    fun onItemMove(fromPosition: Int, toPosition: Int) {
+                folderHolder.itemView.setOnClickListener { onFolderClicked(item.folder) }
+                folderHolder.btnOptions.setOnClickListener { onFolderEditClicked(item.folder) }
+            }
+            is UiItem.AutomationItem -> {
+                val autoHolder = holder as AutomationViewHolder
+                autoHolder.textName.text = item.automation.name
+                autoHolder.textFolder.visibility = View.GONE
+
+                autoHolder.itemView.setOnClickListener { onAutomationClicked(item.automation) }
+            }
+        }
+    }
+
+    override fun getItemCount() = items.size
+
+    fun getItems() = items
+
+    fun updateData(newItems: List<UiItem>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
+    }
+
+    fun onItemMove(fromPosition: Int, toPosition: Int): Boolean {
+        // TRAVA REMOVIDA! Agora você pode arrastar automações para cima ou para baixo de pastas livremente!
+        val fromItem = items[fromPosition]
+        val toItem = items[toPosition]
+
         if (fromPosition < toPosition) {
-            for (i in fromPosition until toPosition) {
-                Collections.swap(automationList, i, i + 1)
-            }
+            for (i in fromPosition until toPosition) Collections.swap(items, i, i + 1)
         } else {
-            for (i in fromPosition downTo toPosition + 1) {
-                Collections.swap(automationList, i, i - 1)
-            }
+            for (i in fromPosition downTo toPosition + 1) Collections.swap(items, i, i - 1)
         }
         notifyItemMoved(fromPosition, toPosition)
-        onListChanged()
+        return true
+    }
+
+    class FolderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val textName: TextView = view.findViewById(R.id.textFolderName)
+        val ivDragHandle: ImageView = view.findViewById(R.id.ivDragHandle)
+        val btnOptions: ImageButton = view.findViewById(R.id.btnFolderOptions)
+    }
+    class AutomationViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val textName: TextView = view.findViewById(R.id.textNomeAutomacao)
+        val textFolder: TextView = view.findViewById(R.id.textFolderName)
+        val ivDragHandle: ImageView = view.findViewById(R.id.ivDragHandle)
     }
 }
