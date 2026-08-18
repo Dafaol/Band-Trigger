@@ -46,6 +46,13 @@ class AutomationsFragment : Fragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Quando o usuário volta para o app, recarrega a lista para pegar o estado real
+        loadData()
+        rebuildRootUiList()
+    }
+
     private fun setupRecyclerView(view: View) {
         val recyclerView: RecyclerView = view.findViewById(R.id.recyclerViewAutomations)
         adapter = AutomationAdapter(
@@ -370,8 +377,8 @@ class AutomationsFragment : Fragment() {
         editUrlOff.setText(automation.webhookUrlOff)
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder")
-        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false))
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)")
+        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true)
 
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
@@ -386,10 +393,15 @@ class AutomationsFragment : Fragment() {
             }
         })
 
-        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "PC_MEDIA" to 0)
+        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "WOL" to 3, "PC_MEDIA" to 0)
         val typeIndex = typeMap[automation.type] ?: 0
         dropdownAction.setText(actionOptions[typeIndex], false)
+
         layoutUrls.visibility = if (typeIndex == 1 || typeIndex == 2) View.GONE else View.VISIBLE
+        if (typeIndex == 3) {
+            editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
+            editUrlOff.visibility = View.GONE
+        }
 
         dropdownAction.setOnItemClickListener { _, _, pos, _ ->
             if (!enabledFlags[pos]) {
@@ -397,7 +409,18 @@ class AutomationsFragment : Fragment() {
                 dropdownAction.setText(actionOptions[0], false)
                 layoutUrls.visibility = View.VISIBLE
             } else {
-                layoutUrls.visibility = if (pos == 1 || pos == 2) View.GONE else View.VISIBLE
+                if (pos == 1 || pos == 2) {
+                    layoutUrls.visibility = View.GONE
+                } else {
+                    layoutUrls.visibility = View.VISIBLE
+                    if (pos == 3) {
+                        editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
+                        editUrlOff.visibility = View.GONE
+                    } else {
+                        editUrlOn.hint = "Turn On URL (Webhook)"
+                        editUrlOff.visibility = View.VISIBLE
+                    }
+                }
             }
         }
 
@@ -420,6 +443,7 @@ class AutomationsFragment : Fragment() {
                 var autoType = "WEBHOOK"
                 if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
                 else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
+                else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
 
                 if (name.isNotEmpty() && urlOn.isNotEmpty()) {
                     automation.name = name
@@ -452,9 +476,9 @@ class AutomationsFragment : Fragment() {
         val dropdownFolder = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdownFolder)
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder")
-        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false))
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)")
 
+        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true)
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
                 return (super.getView(pos, convertView, parent) as android.widget.TextView).apply {
@@ -474,7 +498,18 @@ class AutomationsFragment : Fragment() {
                 dropdownAction.setText(actionOptions[0], false)
                 layoutUrls.visibility = View.VISIBLE
             } else {
-                layoutUrls.visibility = if (pos == 1 || pos == 2) View.GONE else View.VISIBLE
+                if (pos == 1 || pos == 2) {
+                    layoutUrls.visibility = View.GONE
+                } else {
+                    layoutUrls.visibility = View.VISIBLE
+                    if (pos == 3) {
+                        editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
+                        editUrlOff.visibility = View.GONE
+                    } else {
+                        editUrlOn.hint = "Turn On URL (Webhook)"
+                        editUrlOff.visibility = View.VISIBLE
+                    }
+                }
             }
         }
 
@@ -498,6 +533,7 @@ class AutomationsFragment : Fragment() {
                 var autoType = "WEBHOOK"
                 if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
                 else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
+                else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
 
                 if (name.isNotEmpty() && urlOn.isNotEmpty()) {
                     automationsList.add(Automation(
@@ -512,7 +548,6 @@ class AutomationsFragment : Fragment() {
                     rebuildRootUiList()
                     requireActivity().startService(Intent(requireContext(), MediaService::class.java))
 
-                    // REABRE A PASTA AUTOMATICAMENTE APÓS SALVAR
                     if (preSelectedFolderId != null) {
                         val folderToReopen = foldersList.find { it.id == preSelectedFolderId }
                         if (folderToReopen != null) openFolderDialog(folderToReopen)

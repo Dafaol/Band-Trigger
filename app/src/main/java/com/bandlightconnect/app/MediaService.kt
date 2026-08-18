@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 
 class MediaService : Service() {
@@ -199,6 +200,9 @@ class MediaService : Service() {
                 val currentAutomation = item.automation
                 currentAutomation.currentState = !currentAutomation.currentState
 
+                // SALVA O NOVO ESTADO IMEDIATAMENTE PARA NÃO BUGAR O APP
+                saveAutomationsToMemory()
+
                 if (currentAutomation.currentState) {
                     Log.d("BandTrigger", "Smart Toggle: TURN ON")
                     updatePlaybackState(PlaybackState.STATE_PLAYING)
@@ -281,6 +285,9 @@ class MediaService : Service() {
                     updateWatchDisplay()
                 }, 500)
             }
+            else if (automation.type.equals("WOL", ignoreCase = true)) {
+                sendWakeOnLan(commandToExecute)
+            }
             else if (automation.type.equals("AUDIO", ignoreCase = true)) {
                 if (isTurnOn) {
                     val publicMusicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
@@ -308,6 +315,10 @@ class MediaService : Service() {
             if (isPcMedia || !automation.isToggle) {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     automation.currentState = false
+
+                    // SALVA O RESET PARA A TELA NÃO TRAVAR
+                    saveAutomationsToMemory()
+
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
                     updateWatchDisplay()
                 }, 500)
@@ -332,5 +343,62 @@ class MediaService : Service() {
         if (::audioManager.isInitialized) audioManager.abandonAudioFocus { }
         audioRecorder.stopRecording()
         mediaSession?.release()
+    }
+
+    private fun saveAutomationsToMemory() {
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val jsonArray = JSONArray()
+        for (auto in automationList) {
+            jsonArray.put(JSONObject().apply {
+                put("id", auto.id)
+                put("name", auto.name)
+                put("type", auto.type)
+                put("webhookUrlOn", auto.webhookUrlOn)
+                put("webhookUrlOff", auto.webhookUrlOff)
+                put("isToggle", auto.isToggle)
+                put("currentState", auto.currentState)
+                put("folderId", auto.folderId)
+            })
+        }
+        sharedPrefs.edit().putString("AUTOMATIONS_LIST", jsonArray.toString()).apply()
+    }
+
+    private fun sendWakeOnLan(macStr: String) {
+        Thread {
+            try {
+                // Limpa o MAC Address (remove os dois pontos ou traços)
+                val hex = macStr.split(":", "-")
+                if (hex.size != 6) {
+                    Log.e("BandTrigger", "MAC Address inválido")
+                    return@Thread
+                }
+
+                val macBytes = ByteArray(6)
+                for (i in 0..5) {
+                    macBytes[i] = Integer.parseInt(hex[i], 16).toByte()
+                }
+
+                // Monta o Magic Packet: 6 bytes de 0xFF seguidos de 16 vezes o MAC Address
+                val bytes = ByteArray(6 + 16 * macBytes.size)
+                for (i in 0..5) bytes[i] = 0xff.toByte()
+                var i = 6
+                while (i < bytes.size) {
+                    System.arraycopy(macBytes, 0, bytes, i, macBytes.size)
+                    i += macBytes.size
+                }
+
+                // Envia o pacote em Broadcast na porta 9
+                val address = java.net.InetAddress.getByName("255.255.255.255")
+                val packet = java.net.DatagramPacket(bytes, bytes.size, address, 9)
+                val socket = java.net.DatagramSocket()
+                socket.broadcast = true
+                socket.send(packet)
+                socket.close()
+
+                Log.d("BandTrigger", "Magic Packet enviado para $macStr")
+            } catch (e: Exception) {
+                Log.e("BandTrigger", "Erro ao enviar Wake on LAN", e)
+            }
+        }.start()
     }
 }
