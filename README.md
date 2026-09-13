@@ -1,4 +1,4 @@
-# 🚀 Band Trigger (v1.4.1)
+# 🚀 Band Trigger (v1.5.2)
 
 🌎 *Choose your language / Escolha seu idioma:* 
 
@@ -11,65 +11,65 @@
 
 ### 💡 *"Smartbands were designed to track steps and skip songs. I decided they could do more."*
 
-Band Trigger is an Android application built to give a completely new purpose to your wearable device. It intercepts media control events from your smartband and translates them into custom HTTP requests and hardware commands, effectively turning your simple fitness band into a powerful smart home and device remote.
+Band Trigger is an Android application designed to expand the capabilities of your smartband. It intercepts media control events (play, pause, skip) from your wearable and translates them into custom commands for your smart home, PC, or device hardware.
 
 ---
 
 ### ✨ Features
-- **Smart Home Webhooks:** Control smart lights, plugs, or IFTTT routines.
-- **PC Media Controller:** Play, pause, or skip media on your desktop using the provided standalone Python server.
-- **Smart Toggle Display:** Real-time feedback on your wrist! The app updates the track title to show `[ ON ]` or `[ OFF ]` so you never lose track of your automation states.
-- **Focus Hijack:** Automatically reclaims the smartband's media controls whenever third-party media is paused on your phone.
-- **⚠️ Experimental Hardware Modules:** Silently snap photos or record audio straight from your wrist (currently in testing phase, but fully functional).
+- **Smart Home Webhooks:** Control smart lights, plugs, or IFTTT routines easily.
+- **Wake on LAN (WoL):** Turn on your PC remotely directly from your wrist.
+- **Folders & Custom Layout:** Organize your automations into folders. Drag and drop items to customize your layout exactly how you want it (saved automatically).
+- **Smart Display:** Get real-time feedback. The app updates the track title on your watch to show `[ ON ]` or `[ OFF ]` so you always know your automation states.
+- **Auto-Focus:** Automatically reclaims the smartband's media controls whenever a third-party media app is paused on your phone.
+- **⚠️ Hardware Modules (Experimental):** Take photos silently or record audio right from your wrist (currently in testing, but fully functional).
 
 ---
 
 ### ⌚ Compatibility Note
-> **Tested Device:** This application was explicitly developed and tested using a **Samsung Galaxy Fit 3**. However, **it will most likely work** on almost any smartband or smartwatch model capable of handling standard native media controls from Android.
+> **Tested Device:** Developed and primarily tested on a **Samsung Galaxy Fit 3**. However, it should work on almost any smartband or smartwatch that supports standard Android media controls.
 
 ---
 
-### 🛠️ Installation & Sideloading
-Because Band Trigger is an indie open-source tool that requests powerful permissions (like Notification Interception and Camera), **Google Play Protect may display a warning** during installation. 
-* To proceed, simply tap **"More details"** and select **"Install anyway"**, or temporarily disable Play Protect in your Play Store settings.
+### 🛠️ Installation
+Because Band Trigger is an independent open-source tool requesting advanced permissions (like Notification Access and Camera), **Google Play Protect may display a warning** during installation. 
+* To proceed, simply tap **"More details"** and select **"Install anyway"**.
 
 ---
 
-### 👤 How to Use & Tutorials
+### 👤 How to Use
 
-For detailed setup guides, check our documentation:
+For detailed setup guides:
 * [Smart Home Setup Tutorial](docs/SMART_HOME.md)
-* [PC Media Server Tutorial](docs/PC_SERVER.md) ( SOON )
 
-1. **Download & Install:** Get the latest signed `.apk` from the Releases tab.
-2. **Grant Permissions:** Open the **Settings** tab in the app. 
-   - Enable **Hijack Band Focus** (this will redirect you to Android's Notification Access. Grant it so the app can intercept media events).
-   - If you want to use the experimental modules, enable the Camera and Audio permissions here as well.
+1. **Download:** Get the latest `.apk` from the Releases tab.
+2. **Permissions:** Open the **Settings** tab in the app. 
+   - Enable **Hijack Band Focus** (this requests Notification Access so the app can intercept watch commands).
+   - If you want to use the hardware features, enable Camera and Audio permissions here as well.
 3. **Create Automations:** Go to the **Automations** tab and hit the `+` button.
-   - *For Smart Home:* Select "HTTP Webhook" and paste your trigger URLs.
-   - *For PC Media:* Use your local IP with the Python script (e.g., `http://192.168.x.x:5000/playpause`).
+   - *For Organization:* Select "Create Folder" and drag items to reorder them.
+   - *For Smart Home:* Select "HTTP Webhook" and paste your trigger URL.
+   - *For PC Power:* Select "Wake on LAN (PC)" and input your computer's MAC Address.
    - *For Hardware:* Select "Hidden Camera" or "Audio Recorder".
-4. **Trigger it!** Pause any music playing on your phone. Band Trigger will hijack the watch screen. Use the Play/Pause or Skip buttons on your wrist to fire your routines!
+4. **Trigger it!** Pause any media playing on your phone. Band Trigger will take over the watch screen. Use the media buttons on your wrist to run your automations.
 
 ---
 
 ### 💻 For Developers: Technical Overview
 
 **Architecture**
-- **UI & Navigation:** Built with a modular Fragment-based architecture (`SettingsFragment`, `AutomationsFragment`, `AboutFragment`) and smooth swipe transitions using `ViewPager2`.
-- **Media Session Interception & Smart Toggle:** Uses `NotificationListenerService` and `MediaSessionManager` to detect paused media. It pushes an empty, high-priority media session to hijack the smartband display and dynamically updates the `MediaMetadata` to reflect ON/OFF states.
-- **Python Integration:** Includes a lightweight `server/` script utilizing `pyautogui` to expand the Android ecosystem into desktop control.
+- **UI & Navigation:** Fragment-based architecture (`Settings`, `Automations`, `About`) with `ViewPager2` transitions. Features a `RecyclerView` with `ItemTouchHelper` for drag-and-drop folder management.
+- **Media Interception:** Uses `NotificationListenerService` and `MediaSessionManager` to detect paused media. It pushes an empty, high-priority media session to take over the smartband display, updating the `MediaMetadata` dynamically to reflect ON/OFF states.
 
 ---
 
-### 💬 Project Scope & Limitations Note
-> I have done my absolute best to build this project with the highest possible level of polish and reliability within the constraints of an independent solo development. **Feature suggestions are always welcome!** However, please keep in mind that due to architectural and Android system limitations, every new request must be carefully studied to determine if its implementation is feasible.
+### 💬 Scope & Limitations
+> I have done my best to make this app reliable and efficient within the constraints of a solo independent project. **Feature suggestions are welcome!** Keep in mind that due to Android and smartwatch system limitations, the feasibility of every request must be carefully evaluated.
 
 ---
 
 ## ☕ Support the Project
 
-If this app helped you, please help me too! 
+If this app helped you, consider supporting the development! 
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dafaolcreations)
 
@@ -80,64 +80,64 @@ If this app helped you, please help me too!
 
 ### 💡 *"Smartbands foram feitas para contar passos e pular músicas. Eu decidi que elas podiam fazer mais."*
 
-O Band Trigger é um aplicativo Android criado para dar um propósito totalmente novo ao seu dispositivo vestível. Ele intercepta os eventos de controle de mídia da sua smartband e os traduz em requisições HTTP personalizadas e comandos de hardware, transformando sua pulseira inteligente em um poderoso controle remoto.
+O Band Trigger é um aplicativo Android criado para expandir as capacidades da sua smartband. Ele intercepta os controles de mídia (play, pause, avançar) do seu relógio e os transforma em comandos customizados para sua casa inteligente, seu PC ou para o hardware do celular.
 
 ---
 
 ### ✨ Funcionalidades
-- **Webhooks para Casa Inteligente:** Controle luzes, tomadas ou rotinas do IFTTT.
-- **Controle de Mídia do PC:** Dê play, pause ou pule músicas no seu desktop usando o servidor Python autônomo incluso no projeto.
-- **Visor Inteligente (Smart Toggle):** Feedback em tempo real no pulso! O app atualiza o nome da música para mostrar `[ ON ]` (Ligado) ou `[ OFF ]` (Desligado), para você nunca perder o estado da sua automação.
-- **Hijack de Foco:** Assume automaticamente os controles de mídia da smartband sempre que qualquer outra mídia é pausada no celular.
-- **⚠️ Módulos de Hardware (Experimentais):** Tire fotos silenciosas ou grave áudio direto do pulso (atualmente em fase de testes, mas plenamente funcionais).
+- **Webhooks (Casa Inteligente):** Controle luzes, tomadas ou rotinas do IFTTT com facilidade.
+- **Wake on LAN (WoL):** Ligue seu PC remotamente direto do pulso.
+- **Pastas e Layout Customizável:** Organize suas automações em pastas. Arraste e solte os itens para personalizar a ordem do seu jeito (o layout é salvo automaticamente).
+- **Visor Inteligente:** Feedback em tempo real. O app atualiza o nome da música no relógio para mostrar `[ ON ]` (Ligado) ou `[ OFF ]` (Desligado), indicando o estado atual da automação.
+- **Foco Automático:** Assume os controles de mídia da smartband sempre que uma música ou vídeo for pausado no celular.
+- **⚠️ Módulos Nativos (Experimentais):** Tire fotos silenciosas ou grave áudio através dos botões do pulso (em fase de testes, mas totalmente funcional).
 
 ---
 
 ### ⌚ Nota de Compatibilidade
-> **Dispositivo Testado:** Este aplicativo foi desenvolvido e testado utilizando estritamente um **Samsung Galaxy Fit 3**. No entanto, **provavelmente funcionará** em praticamente qualquer modelo de smartband ou smartwatch que possua suporte aos comandos nativos de controle de mídia do Android.
+> **Dispositivo Testado:** Desenvolvido e testado principalmente em uma **Samsung Galaxy Fit 3**. No entanto, deve funcionar na maioria das smartbands e smartwatches que suportam controles de mídia nativos do Android.
 
 ---
 
-### 🛠️ Instalação e Aviso do Play Protect
-Como o Band Trigger é uma ferramenta open-source independente que solicita permissões profundas (como Interceptação de Notificações e Câmera), **o Google Play Protect pode exibir um aviso de bloqueio** durante a instalação. 
-* Para prosseguir, basta tocar em **"Mais detalhes"** e selecionar **"Install anyway / Instalar assim mesmo"**, ou desativar temporariamente a verificação nas configurações da Play Store.
+### 🛠️ Instalação
+Como o app é uma ferramenta open-source independente e requer permissões avançadas (como acesso a Notificações e Câmera), o **Google Play Protect pode exibir um aviso** durante a instalação. 
+* Para prosseguir, basta tocar em **"Mais detalhes"** e depois em **"Instalar assim mesmo"**.
 
 ---
 
-### 👤 Como Usar e Tutoriais
+### 👤 Como Usar
 
-Para guias de configuração detalhados, acesse a documentação específica:
-* [Tutorial para Casa Inteligente (Lâmpadas, Tomadas)](docs/SMART_HOME.md)
-* [Tutorial para Servidor de Mídia no PC](docs/PC_SERVER.md) ( EM BREVE )
+Para um guia mais detalhado:
+* [Tutorial Casa Inteligente (Lâmpadas, Tomadas)](docs/SMART_HOME.md)
 
-1. **Baixe e Instale:** Baixe o `.apk` assinado mais recente na aba de Releases.
-2. **Conceda as Permissões:** Abra a aba **Settings** no app.
-   - Ative o **Hijack Band Focus** (isso abrirá as configurações do Android. Conceda o acesso às notificações para o app interceptar os comandos).
-   - Se quiser usar os módulos experimentais, ative as permissões de Câmera e Áudio nesta mesma tela.
-3. **Crie Automações:** Vá para a aba **Automations** e toque no botão `+`.
-   - *Para Casa Inteligente:* Selecione "HTTP Webhook" e cole as URLs da sua lâmpada/dispositivo.
-   - *Para Mídia do PC:* Use seu IP local apontando para o script Python (ex.: `http://192.168.x.x:5000/playpause`).
-   - *Para Hardware:* Selecione "Câmera Oculta" ou "Gravador de Áudio".
-4. **Acione!** Pause qualquer música tocando no seu celular. O Band Trigger assumirá a tela do relógio. Use os botões de Play/Pause ou Avançar/Voltar no seu pulso para disparar suas rotinas!
+1. **Baixar:** Baixe o `.apk` mais recente na aba de Releases.
+2. **Permissões:** Abra a aba **Settings** no app.
+   - Ative o **Hijack Band Focus** (isso solicitará acesso às notificações para que o app consiga ler os comandos do relógio).
+   - Se quiser usar os recursos de hardware, ative as permissões de Câmera e Áudio nesta mesma tela.
+3. **Criar Automações:** Vá na aba **Automations** e toque no botão `+`.
+   - *Para Organizar:* Escolha "Create Folder" e arraste os itens para reordená-los.
+   - *Para Casa Inteligente:* Escolha "HTTP Webhook" e insira a URL do seu dispositivo.
+   - *Para Ligar o PC:* Escolhe "Wake on LAN (PC)" e digite o MAC Address da sua placa de rede.
+   - *Para Hardware:* Escolha "Câmera Oculta" ou "Gravador de Áudio".
+4. **Acione!** Pause qualquer mídia que estiver tocando no celular. O app assumirá a tela do relógio. Use os botões no pulso para disparar suas automações.
 
 ---
 
 ### 💻 Para Desenvolvedores: Visão Técnica
 
 **Arquitetura**
-- **UI e Navegação:** Construído com arquitetura modular baseada em Fragments (`SettingsFragment`, `AutomationsFragment`, `AboutFragment`) e transições de tela com `ViewPager2`.
-- **Interceptação de Mídia e Smart Toggle:** Utiliza `NotificationListenerService` e `MediaSessionManager` para detectar mídias pausadas. Ele envia uma sessão de mídia vazia com prioridade máxima para assumir o controle do relógio e atualiza os metadados (ON/OFF) dinamicamente.
-- **Integração com Python:** Inclui um script leve na pasta `server/` que utiliza `pyautogui` para expandir o ecossistema do Android até o desktop.
+- **UI e Navegação:** Arquitetura baseada em Fragments (`Settings`, `Automations`, `About`) com transições usando `ViewPager2`. Sistema de drag-and-drop integrado com `RecyclerView` e `ItemTouchHelper` para o gerenciamento de pastas.
+- **Interceptação de Mídia:** Utiliza `NotificationListenerService` e `MediaSessionManager` para detectar pausas. Ele envia uma sessão de mídia vazia de alta prioridade para assumir a tela do relógio, alterando os metadados (ON/OFF) de forma dinâmica.
 
 ---
 
-### 💬 Nota sobre Escopo e Limitações
-> Fiz o meu possível para entregar a experiência mais polida e funcional possível dentro das limitações de um projeto solo. **Sugestões de novas funcionalidades são sempre muito bem-vindas!** Contudo, ressalto que há limitações técnicas inerentes à arquitetura e ao ecossistema, portanto a viabilidade de cada pedido precisa ser estudada caso a caso.
+### 💬 Limitações
+> Me esforcei para entregar um aplicativo estável e eficiente dentro das limitações de um projeto solo independente. **Sugestões de novas funcionalidades são sempre bem-vindas!** Tenham em mente que o sistema Android e os relógios possuem restrições técnicas, portanto a viabilidade de cada pedido precisa ser avaliada cuidadosamente.
 
 ---
 
 ## ☕ Apoie o Projeto
 
-Se este aplicativo te ajudou, me ajude também!
+Se o app foi útil para você, considere apoiar o desenvolvimento!
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dafaolcreations)
