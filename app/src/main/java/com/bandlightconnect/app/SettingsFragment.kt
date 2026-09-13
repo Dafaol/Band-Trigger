@@ -95,14 +95,27 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             }
         }
 
-        // Configuração do botão de sair
+
+        // Configura o do botão de sair
         val btnExitApp = view.findViewById<View>(R.id.btnExitApp)
         btnExitApp.setOnClickListener {
-            // 1. Para o serviço de mídia em segundo plano (devolve o controle ao Android)
-            requireContext().stopService(Intent(requireContext(), MediaService::class.java))
+            val dialog = android.app.AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Turn Off Band Trigger")
+                .setMessage("This will disable the 'Hijack Band Focus' feature and stop the background service.\n\nYou will need to turn it back on in Settings next time you use the app.\n\nExit anyway?")
+                .setPositiveButton("Turn Off") { _, _ ->
+                    val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+                    sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
+                    requireContext().stopService(Intent(requireContext(), MediaService::class.java))
+                    requireActivity().finishAffinity()
+                }
+                .setNegativeButton("Cancel", null)
+                .create()
 
-            // 2. Fecha o aplicativo completamente
-            requireActivity().finishAffinity()
+            dialog.setOnShowListener {
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(android.graphics.Color.parseColor("#FF5252"))
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(android.graphics.Color.WHITE)
+            }
+            dialog.show()
         }
     }
 

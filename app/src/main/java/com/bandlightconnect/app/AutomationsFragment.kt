@@ -48,9 +48,14 @@ class AutomationsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Quando o usuário volta para o app, recarrega a lista para pegar o estado real
+
         loadData()
         rebuildRootUiList()
+
+
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val isFocusEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
+        view?.findViewById<View>(R.id.cardWarningFocus)?.visibility = if (isFocusEnabled) View.GONE else View.VISIBLE
     }
 
     private fun setupRecyclerView(view: View) {

@@ -73,13 +73,21 @@ class MediaService : Service() {
         loadAutomationsFromMemory()
         rebuildDisplayList()
 
-        requestAudioFocus()
-        mediaSession?.isActive = true
+        val isHijackForced = intent?.action == "ACTION_HIJACK"
 
-        updatePlaybackState(PlaybackState.STATE_PLAYING)
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            updatePlaybackState(PlaybackState.STATE_PAUSED)
-        }, 100)
+        // Só rouba a tela (e o áudio) se o FocusListener mandou OU se o celular estiver em silêncio
+        if (isHijackForced || !audioManager.isMusicActive) {
+            requestAudioFocus()
+            mediaSession?.isActive = true
+            updatePlaybackState(PlaybackState.STATE_PLAYING)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                updatePlaybackState(PlaybackState.STATE_PAUSED)
+            }, 100)
+        } else {
+            // Se o usuário só abriu o app e tem música tocando, atualiza em silêncio para não pausar a música
+            mediaSession?.isActive = true
+            updateWatchDisplay()
+        }
 
         return START_STICKY
     }
