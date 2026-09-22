@@ -68,7 +68,7 @@ class FocusListenerService : NotificationListenerService() {
                             }
                         }
                     }
-                    handler.postDelayed(hijackRunnable!!, 400)
+                    handler.postDelayed(hijackRunnable!!, 800)
                 }
             } catch (e: Exception) {
                 Log.e("BandTrigger", "Error reading playback state", e)

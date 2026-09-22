@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -39,18 +40,33 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         }
     }
 
+    // NOVO: Pedido de permissão para a notificação do contador
+    private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val switchCounterNotif = requireView().findViewById<SwitchMaterial>(R.id.switchCounterNotification)
+        if (isGranted) {
+            sharedPrefs.edit().putBoolean("COUNTER_NOTIFICATION_ENABLED", true).apply()
+        } else {
+            switchCounterNotif.isChecked = false
+            sharedPrefs.edit().putBoolean("COUNTER_NOTIFICATION_ENABLED", false).apply()
+            Toast.makeText(requireContext(), "Notification permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
 
         val switchHijackFocus = view.findViewById<SwitchMaterial>(R.id.switchHijackFocus)
         val switchHiddenCamera = view.findViewById<SwitchMaterial>(R.id.switchHiddenCamera)
         val switchAudioRecorder = view.findViewById<SwitchMaterial>(R.id.switchAudioRecorder)
+        val switchCounterNotif = view.findViewById<SwitchMaterial>(R.id.switchCounterNotification)
 
-        // Load initial states
         switchHijackFocus.isChecked = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
         switchHiddenCamera.isChecked = sharedPrefs.getBoolean("CAMERA_ENABLED", false)
         switchAudioRecorder.isChecked = sharedPrefs.getBoolean("AUDIO_ENABLED", false)
+        switchCounterNotif.isChecked = sharedPrefs.getBoolean("COUNTER_NOTIFICATION_ENABLED", false)
 
         switchHijackFocus.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
@@ -95,15 +111,31 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             }
         }
 
+        // NOVO: Lógica atualizada para pedir permissão de notificação no Android 13+
+        switchCounterNotif.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                        sharedPrefs.edit().putBoolean("COUNTER_NOTIFICATION_ENABLED", true).apply()
+                    } else {
+                        requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                } else {
+                    sharedPrefs.edit().putBoolean("COUNTER_NOTIFICATION_ENABLED", true).apply()
+                }
+            } else {
+                sharedPrefs.edit().putBoolean("COUNTER_NOTIFICATION_ENABLED", false).apply()
+                val notificationManager = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.cancel(1001)
+            }
+        }
 
-        // Configura o do botão de sair
         val btnExitApp = view.findViewById<View>(R.id.btnExitApp)
         btnExitApp.setOnClickListener {
             val dialog = android.app.AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Turn Off Band Trigger")
                 .setMessage("This will disable the 'Hijack Band Focus' feature and stop the background service.\n\nYou will need to turn it back on in Settings next time you use the app.\n\nExit anyway?")
                 .setPositiveButton("Turn Off") { _, _ ->
-                    val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
                     sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
                     requireContext().stopService(Intent(requireContext(), MediaService::class.java))
                     requireActivity().finishAffinity()
@@ -121,7 +153,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
 
     override fun onResume() {
         super.onResume()
-        // Automatically sync switch state if user just returned from system settings
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val switchHijackFocus = view?.findViewById<SwitchMaterial>(R.id.switchHijackFocus)
         if (isNotificationServiceEnabled() && sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)) {

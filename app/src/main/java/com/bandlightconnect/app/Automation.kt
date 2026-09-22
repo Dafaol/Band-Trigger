@@ -5,7 +5,7 @@ import java.util.UUID
 data class Automation(
     val id: String = UUID.randomUUID().toString(),
     var name: String,
-    var type: String, // "WEBHOOK", "CAMERA", "AUDIO", "PC_MEDIA"
+    var type: String, // "WEBHOOK", "CAMERA", "AUDIO", "PC_MEDIA", "WOL", "COUNTER"
     var webhookUrlOn: String = "",
     var webhookUrlOff: String = "",
     var isToggle: Boolean = false,

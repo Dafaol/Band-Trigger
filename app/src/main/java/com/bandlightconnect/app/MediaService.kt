@@ -17,6 +17,12 @@ import java.util.UUID
 
 class MediaService : Service() {
 
+    // Variáveis do Contador
+    private var clickCounter = 0
+    private var lastCounterName = "Counter"
+    private val COUNTER_NOTIFICATION_ID = 1001
+    private val COUNTER_CHANNEL_ID = "CounterChannelV2"
+
     private var mediaSession: MediaSession? = null
     private lateinit var audioManager: AudioManager
     private val audioRecorder = AudioRecorderHelper()
@@ -46,9 +52,11 @@ class MediaService : Service() {
             override fun onPlay() {
                 handlePlayPause()
             }
+
             override fun onPause() {
                 handlePlayPause()
             }
+
             override fun onSkipToNext() {
                 if (activeDisplayList.isNotEmpty()) {
                     currentIndex = (currentIndex + 1) % activeDisplayList.size
@@ -56,6 +64,7 @@ class MediaService : Service() {
                     syncPlaybackStateForCurrentItem()
                 }
             }
+
             override fun onSkipToPrevious() {
                 if (activeDisplayList.isNotEmpty()) {
                     currentIndex = if (currentIndex - 1 < 0) activeDisplayList.size - 1 else currentIndex - 1
@@ -70,26 +79,91 @@ class MediaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Se o comando for para zerar o contador através do botão na notificação
+        if (intent?.action == "ACTION_RESET_COUNTER") {
+            clickCounter = 0
+
+            // Destrói a notificação do celular para limpar a tela
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.cancel(COUNTER_NOTIFICATION_ID)
+
+            // Atualiza o visor do relógio para mostrar que zerou
+            updateWatchDisplay()
+
+            return START_STICKY
+        }
+
         loadAutomationsFromMemory()
         rebuildDisplayList()
 
-        val isHijackForced = intent?.action == "ACTION_HIJACK"
-
-        // Só rouba a tela (e o áudio) se o FocusListener mandou OU se o celular estiver em silêncio
-        if (isHijackForced || !audioManager.isMusicActive) {
+        // A CORREÇÃO: O celular é a fonte absoluta da verdade.
+        // Se tem música tocando (transição rápida do 5G), apenas atualizamos a tela em silêncio.
+        if (audioManager.isMusicActive) {
+            mediaSession?.isActive = true
+            updateWatchDisplay()
+            Log.d("BandTrigger", "Transição de faixa detectada. Foco mantido no player de música.")
+        } else {
+            // Se está realmente em silêncio, o Band Trigger assume o controle.
             requestAudioFocus()
             mediaSession?.isActive = true
             updatePlaybackState(PlaybackState.STATE_PLAYING)
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 updatePlaybackState(PlaybackState.STATE_PAUSED)
             }, 100)
-        } else {
-            // Se o usuário só abriu o app e tem música tocando, atualiza em silêncio para não pausar a música
-            mediaSession?.isActive = true
-            updateWatchDisplay()
         }
 
         return START_STICKY
+    }
+
+    private fun updateCounterNotification(automationName: String) {
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val isNotifEnabled = sharedPrefs.getBoolean("COUNTER_NOTIFICATION_ENABLED", false)
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        // Se a opção estiver desligada, destrói a notificação
+        if (!isNotifEnabled) {
+            notificationManager.cancel(COUNTER_NOTIFICATION_ID)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // MUDANÇA 1: IMPORTANCE_DEFAULT para o relógio não ignorar a notificação
+            val channel = android.app.NotificationChannel(
+                COUNTER_CHANNEL_ID,
+                "Band Trigger Counter",
+                android.app.NotificationManager.IMPORTANCE_DEFAULT
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, COUNTER_CHANNEL_ID)
+            // MUDANÇA 2: Usando o ícone de lista do próprio app para não bugar no Android
+            .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
+            // MUDANÇA 3: Nome do app explícito no título para não causar confusão
+            .setContentTitle("$automationName")
+            .setContentText("Count: $clickCounter")
+            .setOnlyAlertOnce(true) // Impede que o celular apite a cada novo clique
+            // MUDANÇA 4: Removemos o setOngoing(true) para o relógio aceitar receber
+            .setAutoCancel(false)
+
+        // Adiciona o botão de Reset apenas se o contador for maior que 0
+        if (clickCounter > 0) {
+            val resetIntent = Intent(this, MediaService::class.java).apply {
+                action = "ACTION_RESET_COUNTER"
+            }
+
+            val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            }
+
+            val resetPendingIntent = android.app.PendingIntent.getService(this, 1, resetIntent, pendingFlags)
+            builder.addAction(android.R.drawable.ic_menu_revert, "Reset", resetPendingIntent)
+        }
+
+        notificationManager.notify(COUNTER_NOTIFICATION_ID, builder.build())
     }
 
     private fun requestAudioFocus() {
@@ -106,7 +180,6 @@ class MediaService : Service() {
 
     private fun loadAutomationsFromMemory() {
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-
         foldersList.clear()
         try {
             val fArray = JSONArray(sharedPrefs.getString("FOLDERS_LIST", "[]"))
@@ -121,7 +194,6 @@ class MediaService : Service() {
             val jsonArray = JSONArray(sharedPrefs.getString("AUTOMATIONS_LIST", "[]"))
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
-
                 val id = obj.optString("id", UUID.randomUUID().toString())
                 val name = obj.getString("name")
                 val type = obj.optString("type", "WEBHOOK")
@@ -149,10 +221,10 @@ class MediaService : Service() {
         activeDisplayList.clear()
 
         if (currentFolderId == null) {
-            // Se estiver na Raiz, carrega a exata ordem misturada do App!
             val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
             val orderArrayStr = sharedPrefs.getString("ROOT_UI_ORDER", "[]")
             val orderArray = JSONArray(orderArrayStr)
+
             val addedIds = mutableSetOf<String>()
 
             for (i in 0 until orderArray.length()) {
@@ -173,14 +245,12 @@ class MediaService : Service() {
                     }
                 }
             }
+
             foldersList.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.FolderItem(it)) }
             automationList.filter { it.folderId == null }.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
 
         } else {
-            // Se estiver dentro de uma pasta:
-            // 1. Mostra as automações primeiro
             automationList.filter { it.folderId == currentFolderId }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
-            // 2. Coloca o Botão de Voltar ("Sair Pasta") como o ÚLTIMO item!
             activeDisplayList.add(BandDisplayItem.BackItem)
         }
 
@@ -208,19 +278,25 @@ class MediaService : Service() {
                 val currentAutomation = item.automation
                 currentAutomation.currentState = !currentAutomation.currentState
 
-                // SALVA O NOVO ESTADO IMEDIATAMENTE PARA NÃO BUGAR O APP
                 saveAutomationsToMemory()
 
-                if (currentAutomation.currentState) {
-                    Log.d("BandTrigger", "Smart Toggle: TURN ON")
-                    updatePlaybackState(PlaybackState.STATE_PLAYING)
-                    triggerCurrentWebhook(currentAutomation, isTurnOn = true)
+                if (currentAutomation.type.equals("COUNTER", ignoreCase = true)) {
+                    clickCounter++
+                    lastCounterName = currentAutomation.name
+                    updateCounterNotification(lastCounterName)
+                    updateWatchDisplay()
                 } else {
-                    Log.d("BandTrigger", "Smart Toggle: TURN OFF")
-                    updatePlaybackState(PlaybackState.STATE_PAUSED)
-                    triggerCurrentWebhook(currentAutomation, isTurnOn = false)
+                    if (currentAutomation.currentState) {
+                        Log.d("BandTrigger", "Smart Toggle: TURN ON")
+                        updatePlaybackState(PlaybackState.STATE_PLAYING)
+                        triggerCurrentWebhook(currentAutomation, isTurnOn = true)
+                    } else {
+                        Log.d("BandTrigger", "Smart Toggle: TURN OFF")
+                        updatePlaybackState(PlaybackState.STATE_PAUSED)
+                        triggerCurrentWebhook(currentAutomation, isTurnOn = false)
+                    }
+                    updateWatchDisplay()
                 }
-                updateWatchDisplay()
             }
         }
     }
@@ -250,24 +326,28 @@ class MediaService : Service() {
             is BandDisplayItem.BackItem -> {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 🏠 Exit Folder ]")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ \uD83D\uDD19 Exit Folder ]")
                     .build()
                 mediaSession?.setMetadata(metadata)
             }
             is BandDisplayItem.FolderItem -> {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 📁 ${item.folder.name} ]")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ \uD83D\uDCC1 ${item.folder.name} ]")
                     .build()
                 mediaSession?.setMetadata(metadata)
             }
             is BandDisplayItem.AutomationItem -> {
-                val stateText = if (item.automation.isToggle) {
-                    if (item.automation.currentState) "[ ON ]" else "[ OFF ]"
+                val stateText = if (item.automation.type.equals("COUNTER", ignoreCase = true)) {
+                    "[ \uD83D\uDD22 COUNT: $clickCounter ]"
+                } else if (item.automation.isToggle) {
+                    if (item.automation.currentState) "[ \uD83D\uDFE2 ON ]" else "[ \uD83D\uDD34 OFF ]"
                 } else {
-                    "[ TRIGGER ]"
+                    "[ \u26A1 TRIGGER ]"
                 }
+
                 val titleWithState = "${item.automation.name}  $stateText"
+
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, titleWithState)
@@ -286,7 +366,6 @@ class MediaService : Service() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 }
                 startActivity(intent)
-
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     automation.currentState = false
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
@@ -323,10 +402,7 @@ class MediaService : Service() {
             if (isPcMedia || !automation.isToggle) {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     automation.currentState = false
-
-                    // SALVA O RESET PARA A TELA NÃO TRAVAR
                     saveAutomationsToMemory()
-
                     updatePlaybackState(PlaybackState.STATE_PAUSED)
                     updateWatchDisplay()
                 }, 500)
@@ -351,6 +427,9 @@ class MediaService : Service() {
         if (::audioManager.isInitialized) audioManager.abandonAudioFocus { }
         audioRecorder.stopRecording()
         mediaSession?.release()
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.cancel(COUNTER_NOTIFICATION_ID)
     }
 
     private fun saveAutomationsToMemory() {
@@ -374,19 +453,16 @@ class MediaService : Service() {
     private fun sendWakeOnLan(macStr: String) {
         Thread {
             try {
-                // Limpa o MAC Address (remove os dois pontos ou traços)
                 val hex = macStr.split(":", "-")
                 if (hex.size != 6) {
                     Log.e("BandTrigger", "MAC Address inválido")
                     return@Thread
                 }
-
                 val macBytes = ByteArray(6)
                 for (i in 0..5) {
                     macBytes[i] = Integer.parseInt(hex[i], 16).toByte()
                 }
 
-                // Monta o Magic Packet: 6 bytes de 0xFF seguidos de 16 vezes o MAC Address
                 val bytes = ByteArray(6 + 16 * macBytes.size)
                 for (i in 0..5) bytes[i] = 0xff.toByte()
                 var i = 6
@@ -395,14 +471,12 @@ class MediaService : Service() {
                     i += macBytes.size
                 }
 
-                // Envia o pacote em Broadcast na porta 9
                 val address = java.net.InetAddress.getByName("255.255.255.255")
                 val packet = java.net.DatagramPacket(bytes, bytes.size, address, 9)
                 val socket = java.net.DatagramSocket()
                 socket.broadcast = true
                 socket.send(packet)
                 socket.close()
-
                 Log.d("BandTrigger", "Magic Packet enviado para $macStr")
             } catch (e: Exception) {
                 Log.e("BandTrigger", "Erro ao enviar Wake on LAN", e)

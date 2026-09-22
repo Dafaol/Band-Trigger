@@ -26,7 +26,6 @@ class AutomationsFragment : Fragment() {
     private val automationsList = mutableListOf<Automation>()
     private val foldersList = mutableListOf<Folder>()
     private val foldersMap = mutableMapOf<String, String>()
-
     private lateinit var adapter: AutomationAdapter
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -35,7 +34,6 @@ class AutomationsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         loadData()
         setupRecyclerView(view)
 
@@ -48,10 +46,8 @@ class AutomationsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-
         loadData()
         rebuildRootUiList()
-
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val isFocusEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
@@ -106,7 +102,6 @@ class AutomationsFragment : Fragment() {
         val displayList = mutableListOf<UiItem>()
         val addedIds = mutableSetOf<String>()
 
-        // 1. Carrega os itens na ordem misturada exata que o usuário salvou
         for (i in 0 until orderArray.length()) {
             val idStr = orderArray.getString(i)
             if (idStr.startsWith("FOLDER_")) {
@@ -126,7 +121,6 @@ class AutomationsFragment : Fragment() {
             }
         }
 
-        // 2. Adiciona novos itens que ainda não têm ordem no final da lista
         foldersList.forEach { if (!addedIds.contains(it.id)) displayList.add(UiItem.FolderItem(it)) }
         automationsList.filter { it.folderId == null }.forEach { if (!addedIds.contains(it.id)) displayList.add(UiItem.AutomationItem(it)) }
 
@@ -135,7 +129,6 @@ class AutomationsFragment : Fragment() {
 
     private fun syncRootListsWithAdapter() {
         val currentUiItems = adapter.getItems()
-
         saveRootOrder(currentUiItems)
 
         val newFolders = currentUiItems.filterIsInstance<UiItem.FolderItem>().map { it.folder }
@@ -158,12 +151,10 @@ class AutomationsFragment : Fragment() {
         val dialog = android.app.Dialog(requireContext())
         dialog.setContentView(R.layout.dialog_folder_options)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-
         val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         dialog.findViewById<android.widget.TextView>(R.id.tvOptionsTitle).text = folder.name
-
         dialog.findViewById<View>(R.id.optionRenameFolder).setOnClickListener {
             dialog.dismiss()
             showRenameFolderDialog(folder)
@@ -181,6 +172,7 @@ class AutomationsFragment : Fragment() {
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
         }
+
         val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Rename Folder")
             .setView(input)
@@ -210,10 +202,8 @@ class AutomationsFragment : Fragment() {
             .setMessage("Are you sure you want to delete '${folder.name}'?\n\nSafeguard: All automations inside it will be safely moved to the Root.")
             .setPositiveButton("Delete") { _, _ ->
                 automationsList.filter { it.folderId == folder.id }.forEach { it.folderId = null }
-
                 foldersList.removeIf { it.id == folder.id }
                 foldersMap.remove(folder.id)
-
                 saveFolders()
                 saveAutomations()
                 rebuildRootUiList()
@@ -233,7 +223,6 @@ class AutomationsFragment : Fragment() {
     private fun openFolderDialog(folder: Folder) {
         val dialog = android.app.Dialog(requireContext())
         dialog.setContentView(R.layout.dialog_folder_view)
-
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -245,16 +234,13 @@ class AutomationsFragment : Fragment() {
 
         tvTitle.text = folder.name
         btnBack.setOnClickListener { dialog.dismiss() }
-
         btnAdd.setOnClickListener {
             dialog.dismiss()
             showAddAutomationDialog(folder.id)
         }
 
         val folderAutos = automationsList.filter { it.folderId == folder.id }.map { UiItem.AutomationItem(it) }.toMutableList()
-
         lateinit var folderAdapter: AutomationAdapter
-
         folderAdapter = AutomationAdapter(
             items = folderAutos as MutableList<UiItem>,
             onFolderClicked = { },
@@ -269,7 +255,6 @@ class AutomationsFragment : Fragment() {
                 automationsList.clear()
                 automationsList.addAll(otherAutos)
                 automationsList.addAll(newOrder)
-
                 saveAutomations()
                 requireActivity().startService(Intent(requireContext(), MediaService::class.java))
             }
@@ -290,13 +275,11 @@ class AutomationsFragment : Fragment() {
                 automationsList.clear()
                 automationsList.addAll(otherAutos)
                 automationsList.addAll(newOrder)
-
                 saveAutomations()
                 requireActivity().startService(Intent(requireContext(), MediaService::class.java))
             }
         })
         itemTouchHelper.attachToRecyclerView(rvFolder)
-
         dialog.show()
     }
 
@@ -322,6 +305,7 @@ class AutomationsFragment : Fragment() {
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
         }
+
         val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("New Folder")
             .setView(input)
@@ -344,19 +328,37 @@ class AutomationsFragment : Fragment() {
     }
 
     private fun showAutomationDetails(automation: Automation) {
-        val msg = "Turn ON:\n${automation.webhookUrlOn}\n\nTurn OFF:\n${automation.webhookUrlOff.ifEmpty { "N/A" }}"
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        val msg = if (automation.type.equals("COUNTER", ignoreCase = true)) {
+            "This is a Counter automation.\nYou can reset the current count to zero below."
+        } else {
+            "Turn ON:\n${automation.webhookUrlOn}\n\nTurn OFF:\n${automation.webhookUrlOff.ifEmpty { "N/A" }}"
+        }
+
+        val dialogBuilder = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(automation.name)
             .setMessage(msg)
-            .setPositiveButton("Close", null)
             .setNeutralButton("Edit") { _, _ -> showEditAutomationDialog(automation) }
             .setNegativeButton("Delete") { _, _ ->
                 automationsList.remove(automation)
                 saveAutomations()
                 rebuildRootUiList()
                 requireActivity().startService(Intent(requireContext(), MediaService::class.java))
-            }.create()
+            }
 
+        // Se for um contador, o botão principal zera a contagem. Se não, apenas fecha.
+        if (automation.type.equals("COUNTER", ignoreCase = true)) {
+            dialogBuilder.setPositiveButton("Reset") { _, _ ->
+                val intent = Intent(requireContext(), MediaService::class.java).apply {
+                    action = "ACTION_RESET_COUNTER"
+                }
+                requireContext().startService(intent)
+                Toast.makeText(requireContext(), "Counter reset to 0", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            dialogBuilder.setPositiveButton("Close", null)
+        }
+
+        val dialog = dialogBuilder.create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.parseColor("#BB86FC"))
@@ -382,8 +384,8 @@ class AutomationsFragment : Fragment() {
         editUrlOff.setText(automation.webhookUrlOff)
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)")
-        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true)
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)", "Counter")
+        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true, true)
 
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
@@ -398,11 +400,11 @@ class AutomationsFragment : Fragment() {
             }
         })
 
-        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "WOL" to 3, "PC_MEDIA" to 0)
+        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "WOL" to 3, "PC_MEDIA" to 0, "COUNTER" to 4)
         val typeIndex = typeMap[automation.type] ?: 0
         dropdownAction.setText(actionOptions[typeIndex], false)
 
-        layoutUrls.visibility = if (typeIndex == 1 || typeIndex == 2) View.GONE else View.VISIBLE
+        layoutUrls.visibility = if (typeIndex == 1 || typeIndex == 2 || typeIndex == 4) View.GONE else View.VISIBLE
         if (typeIndex == 3) {
             editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
             editUrlOff.visibility = View.GONE
@@ -414,7 +416,7 @@ class AutomationsFragment : Fragment() {
                 dropdownAction.setText(actionOptions[0], false)
                 layoutUrls.visibility = View.VISIBLE
             } else {
-                if (pos == 1 || pos == 2) {
+                if (pos == 1 || pos == 2 || pos == 4) {
                     layoutUrls.visibility = View.GONE
                 } else {
                     layoutUrls.visibility = View.VISIBLE
@@ -442,13 +444,13 @@ class AutomationsFragment : Fragment() {
                 var urlOff = editUrlOff.text.toString()
                 val selectedAction = dropdownAction.text.toString()
                 val selectedFolder = dropdownFolder.text.toString()
-
                 val folderId = foldersList.find { it.name == selectedFolder }?.id
 
                 var autoType = "WEBHOOK"
                 if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
                 else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
                 else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
+                else if (selectedAction == "Counter") { urlOn = "COUNT"; urlOff = ""; autoType = "COUNTER" }
 
                 if (name.isNotEmpty() && urlOn.isNotEmpty()) {
                     automation.name = name
@@ -481,9 +483,9 @@ class AutomationsFragment : Fragment() {
         val dropdownFolder = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdownFolder)
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)")
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)", "Counter")
+        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true, true)
 
-        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true)
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
                 return (super.getView(pos, convertView, parent) as android.widget.TextView).apply {
@@ -496,14 +498,16 @@ class AutomationsFragment : Fragment() {
                 }
             }
         })
+
         dropdownAction.setText(actionOptions[0], false)
+
         dropdownAction.setOnItemClickListener { _, _, pos, _ ->
             if (!enabledFlags[pos]) {
                 Toast.makeText(requireContext(), "Enable this feature in Settings!", Toast.LENGTH_LONG).show()
                 dropdownAction.setText(actionOptions[0], false)
                 layoutUrls.visibility = View.VISIBLE
             } else {
-                if (pos == 1 || pos == 2) {
+                if (pos == 1 || pos == 2 || pos == 4) {
                     layoutUrls.visibility = View.GONE
                 } else {
                     layoutUrls.visibility = View.VISIBLE
@@ -532,13 +536,13 @@ class AutomationsFragment : Fragment() {
                 var urlOff = editUrlOff.text.toString()
                 val selectedAction = dropdownAction.text.toString()
                 val selectedFolder = dropdownFolder.text.toString()
-
                 val folderId = foldersList.find { it.name == selectedFolder }?.id
 
                 var autoType = "WEBHOOK"
                 if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
                 else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
                 else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
+                else if (selectedAction == "Counter") { urlOn = "COUNT"; urlOff = ""; autoType = "COUNTER" }
 
                 if (name.isNotEmpty() && urlOn.isNotEmpty()) {
                     automationsList.add(Automation(

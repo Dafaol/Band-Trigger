@@ -81,6 +81,25 @@
         android:textColor="#888888"
         android:textSize="14sp" />
 
+    <!-- NOVO: Counter Notification Switch -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switchCounterNotification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Counter Notification"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        app:thumbTint="@color/bottom_nav_colors" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Shows a persistent notification on your phone with the current count and a reset button."
+        android:textColor="#888888"
+        android:textSize="14sp" />
+
     <!-- Line/Separator -->
     <View
         android:layout_width="match_parent"
@@ -100,4 +119,5 @@
         android:text="Turn Off and Exit"
         android:textColor="#FF5252"
         app:strokeColor="#FF5252" />
+
 </LinearLayout>
