@@ -18,7 +18,6 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
-    <!-- Lista Suspensa de Ação -->
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
         android:layout_width="match_parent"
@@ -36,7 +35,6 @@
             android:textColor="#FFFFFF" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Lista Suspensa de Pastas (NOVO) -->
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
         android:layout_width="match_parent"
@@ -64,6 +62,7 @@
         android:textColor="#FFFFFF"
         android:textColorHint="#AAAAAA" />
 
+    <!-- LAYOUT PADRÃO (Webhooks e WOL) -->
     <LinearLayout
         android:id="@+id/layoutUrls"
         android:layout_width="match_parent"
@@ -90,5 +89,58 @@
             android:inputType="textUri"
             android:textColor="#FFFFFF"
             android:textColorHint="#AAAAAA" />
+    </LinearLayout>
+
+    <!-- NOVO: LAYOUT EXCLUSIVO DO ALARME LIMPO E POLIDO -->
+    <LinearLayout
+        android:id="@+id/layoutAlarmConfig"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- Título do Horário -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Alarm Time"
+            android:textColor="#AAAAAA"
+            android:layout_marginBottom="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:padding="16dp"
+            android:text="Tap to Set Time"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            app:backgroundTint="#151515"
+            app:strokeColor="#BB86FC"
+            app:strokeWidth="1dp"
+            app:cornerRadius="12dp" />
+
+        <!-- Título dos Dias -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Repeat Days"
+            android:textColor="#AAAAAA"
+            android:layout_marginBottom="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectDays"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:padding="16dp"
+            android:text="Repeat: Never"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            app:backgroundTint="#151515"
+            app:strokeColor="#BB86FC"
+            app:strokeWidth="1dp"
+            app:cornerRadius="12dp" />
     </LinearLayout>
 </LinearLayout>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="#2C2C2C"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Cabeçalho (Fundo mais escuro) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#151515"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Select Repeat Days"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Lista de Dias com Divisórias -->
+        <CheckBox android:id="@+id/chkDay0" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sunday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay1" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Monday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay2" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tuesday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay3" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Wednesday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay4" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Thursday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay5" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Friday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#444444" />
+
+        <CheckBox android:id="@+id/chkDay6" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Saturday" android:textColor="#FFFFFF" android:buttonTint="#BB86FC" android:padding="16dp"/>
+
+        <!-- Rodapé (Fundo mais escuro) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#151515"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:padding="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancelDays"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancel"
+                android:textColor="#FFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveDays"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:textStyle="bold"
+                android:textColor="#BB86FC" />
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

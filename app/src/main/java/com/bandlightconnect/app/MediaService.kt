@@ -17,6 +17,13 @@ import java.util.UUID
 
 class MediaService : Service() {
 
+    // Variáveis do Alarme
+    private var isAlarmRinging = false
+    private val alarmHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var alarmRunnable: Runnable? = null
+    private val ALARM_NOTIFICATION_ID = 2002
+    private val ALARM_CHANNEL_ID = "AlarmChannelV3"
+
     // Variáveis do Contador
     private var clickCounter = 0
     private var lastCounterName = "Counter"
@@ -79,6 +86,13 @@ class MediaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        if (intent?.action == "ACTION_FIRE_ALARM") {
+            val alarmName = intent.getStringExtra("ALARM_NAME") ?: "Lembrete"
+            startAlarmLoop(alarmName)
+            return START_STICKY
+        }
+
         // Se o comando for para zerar o contador através do botão na notificação
         if (intent?.action == "ACTION_RESET_COUNTER") {
             clickCounter = 0
@@ -194,25 +208,23 @@ class MediaService : Service() {
             val jsonArray = JSONArray(sharedPrefs.getString("AUTOMATIONS_LIST", "[]"))
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
-                val id = obj.optString("id", UUID.randomUUID().toString())
-                val name = obj.getString("name")
-                val type = obj.optString("type", "WEBHOOK")
-                val webhookUrlOn = obj.optString("webhookUrlOn", "")
-                val webhookUrlOff = obj.optString("webhookUrlOff", "")
-                val isToggle = obj.optBoolean("isToggle", false)
-                val currentState = obj.optBoolean("currentState", false)
-                val folderId = if (obj.has("folderId") && !obj.isNull("folderId")) obj.getString("folderId") else null
+                val automation = Automation(
+                    id = obj.optString("id", UUID.randomUUID().toString()),
+                    name = obj.getString("name"),
+                    type = obj.optString("type", "WEBHOOK"),
+                    webhookUrlOn = obj.optString("webhookUrlOn", ""),
+                    webhookUrlOff = obj.optString("webhookUrlOff", ""),
+                    isToggle = obj.optBoolean("isToggle", false),
+                    currentState = obj.optBoolean("currentState", false),
+                    folderId = if (obj.has("folderId") && !obj.isNull("folderId")) obj.getString("folderId") else null,
+                    alarmDays = obj.optString("alarmDays", "")
+                )
+                automationList.add(automation)
 
-                automationList.add(Automation(
-                    id = id,
-                    name = name,
-                    type = type,
-                    webhookUrlOn = webhookUrlOn,
-                    webhookUrlOff = webhookUrlOff,
-                    isToggle = isToggle,
-                    currentState = currentState,
-                    folderId = folderId
-                ))
+                // NOVO: Se for um alarme, já agenda ele ao carregar a memória!
+                if (automation.type == "ALARM") {
+                    scheduleAlarm(automation)
+                }
             }
         } catch (e: Exception) { Log.e("BandTrigger", "Error loading automations", e) }
     }
@@ -259,6 +271,19 @@ class MediaService : Service() {
     }
 
     private fun handlePlayPause() {
+        // NOVO: Se o alarme estiver tocando, o Play/Pause serve como botão de "Desarmar"
+        if (isAlarmRinging) {
+            isAlarmRinging = false
+            alarmRunnable?.let { alarmHandler.removeCallbacks(it) }
+
+            val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notifManager.cancel(ALARM_NOTIFICATION_ID)
+
+            updatePlaybackState(PlaybackState.STATE_PAUSED)
+            updateWatchDisplay() // Volta a tela ao normal
+            return
+        }
+
         if (activeDisplayList.isEmpty()) return
 
         when (val item = activeDisplayList[currentIndex]) {
@@ -285,6 +310,9 @@ class MediaService : Service() {
                     lastCounterName = currentAutomation.name
                     updateCounterNotification(lastCounterName)
                     updateWatchDisplay()
+                } else if (currentAutomation.type.equals("ALARM", ignoreCase = true)) {
+                    // Disparo manual para testar o visual do alarme!
+                    startAlarmLoop(currentAutomation.name)
                 } else {
                     if (currentAutomation.currentState) {
                         Log.d("BandTrigger", "Smart Toggle: TURN ON")
@@ -300,6 +328,7 @@ class MediaService : Service() {
             }
         }
     }
+
 
     private fun syncPlaybackStateForCurrentItem() {
         if (activeDisplayList.isEmpty()) return
@@ -339,11 +368,13 @@ class MediaService : Service() {
             }
             is BandDisplayItem.AutomationItem -> {
                 val stateText = if (item.automation.type.equals("COUNTER", ignoreCase = true)) {
-                    "[ \uD83D\uDD22 COUNT: $clickCounter ]"
+                    "[ 🔢 COUNT: $clickCounter ]"
+                } else if (item.automation.type.equals("ALARM", ignoreCase = true)) {
+                    "[ ⏰ ${item.automation.webhookUrlOn} ]"
                 } else if (item.automation.isToggle) {
-                    if (item.automation.currentState) "[ \uD83D\uDFE2 ON ]" else "[ \uD83D\uDD34 OFF ]"
+                    if (item.automation.currentState) "[ 🟢 ON ]" else "[ 🔴 OFF ]"
                 } else {
-                    "[ \u26A1 TRIGGER ]"
+                    "[ ⚡ TRIGGER ]"
                 }
 
                 val titleWithState = "${item.automation.name}  $stateText"
@@ -482,5 +513,125 @@ class MediaService : Service() {
                 Log.e("BandTrigger", "Erro ao enviar Wake on LAN", e)
             }
         }.start()
+    }
+
+    private fun startAlarmLoop(alarmName: String) {
+        isAlarmRinging = true
+
+        // 1. Dispara a notificação de ALTA PRIORIDADE para o celular e relógio VIBRAREM
+        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                ALARM_CHANNEL_ID,
+                "Alarmes",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500) // Vibração agressiva
+            }
+            notifManager.createNotificationChannel(channel)
+        }
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, ALARM_CHANNEL_ID)
+            .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
+            .setContentTitle("🚨 $alarmName")
+            .setContentText("Press Play/Pause on the watch to disarm!")
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX) // MÁXIMA
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL) // FORÇA O CELULAR A APITAR E VIBRAR ALTO
+            .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+            .setAutoCancel(true)
+
+        notifManager.notify(ALARM_NOTIFICATION_ID, builder.build())
+
+        // 2. O Sequestro de Tela (Pisca a tela do relógio a cada 2.5s)
+        alarmRunnable = object : Runnable {
+            var toggle = false
+            override fun run() {
+                if (!isAlarmRinging) return
+
+                val metadata = MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "🚨 $alarmName 🚨")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, if (toggle) "[- PRESS PLAY -]" else "[- TO STOP -]")
+                    .build()
+                mediaSession?.setMetadata(metadata)
+
+                updatePlaybackState(if (toggle) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED)
+                toggle = !toggle
+
+                // Repete a cada 2.5 segundos
+                alarmHandler.postDelayed(this, 2500)
+            }
+        }
+
+        // Inicia o loop imediatamente
+        alarmHandler.post(alarmRunnable!!)
+    }
+
+    private fun scheduleAlarm(auto: Automation) {
+        val parts = auto.webhookUrlOn.split(":")
+        if (parts.size != 2) return
+        val hour = parts[0].toIntOrNull() ?: return
+        val minute = parts[1].toIntOrNull() ?: return
+
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, hour)
+            set(java.util.Calendar.MINUTE, minute)
+            set(java.util.Calendar.SECOND, 0)
+        }
+
+        val selectedDays = auto.alarmDays.split(",").mapNotNull { it.toIntOrNull() }
+
+        if (selectedDays.isEmpty()) {
+            // Alarme único (não repete)
+            if (calendar.before(java.util.Calendar.getInstance())) {
+                calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            }
+        } else {
+            // Alarme recorrente: encontrar o próximo dia válido
+            val currentDayOfWeek = calendar.get(java.util.Calendar.DAY_OF_WEEK)
+            var daysToAdd = 0
+
+            // Verifica os próximos 7 dias
+            for (i in 0..7) {
+                val checkDay = (currentDayOfWeek + i - 1) % 7 + 1
+                if (selectedDays.contains(checkDay)) {
+                    if (i == 0 && calendar.before(java.util.Calendar.getInstance())) {
+                        // É hoje, mas o horário já passou, então checa a próxima ocorrência
+                        continue
+                    }
+                    daysToAdd = i
+                    break
+                }
+            }
+            // Se passou pelo loop e daysToAdd é 0, mas o horário já passou, repete na mesma semana
+            if (daysToAdd == 0 && calendar.before(java.util.Calendar.getInstance())) {
+                daysToAdd = 7
+            }
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, daysToAdd)
+        }
+
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val intent = Intent(this, AlarmReceiver::class.java).apply {
+            putExtra("ALARM_NAME", auto.name)
+            putExtra("ALARM_ID", auto.id)
+        }
+        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = android.app.PendingIntent.getBroadcast(this, auto.id.hashCode(), intent, pendingFlags)
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            } else {
+                alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            }
+            Log.d("BandTrigger", "Alarme ${auto.name} agendado para: ${calendar.time}")
+        } catch (e: SecurityException) {
+            Log.e("BandTrigger", "Sem permissão de alarme exato", e)
+        }
     }
 }
