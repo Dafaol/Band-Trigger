@@ -1,4 +1,4 @@
-# 🚀 Band Trigger (v1.5.2)
+# 🚀 Band Trigger (v1.7)
 
 🌎 *Choose your language / Escolha seu idioma:* 
 
@@ -18,6 +18,9 @@ Band Trigger is an Android application designed to expand the capabilities of yo
 ### ✨ Features
 - **Smart Home Webhooks:** Control smart lights, plugs, or IFTTT routines easily.
 - **Wake on LAN (WoL):** Turn on your PC remotely directly from your wrist.
+- **Google Calendar Sync:** A background worker automatically reads your upcoming events for the next 24 hours and converts them into smartband alarms within a dedicated folder. 
+- **Smartband Alarms:** Create standalone offline alarms with specific repeat days, triggering high-priority vibration alerts directly on your wrist until disarmed.
+- **Persistent Counter:** Counter automations feature a real-time tracking notification on your phone with a quick reset button.
 - **Folders & Custom Layout:** Organize your automations into folders. Drag and drop items to customize your layout exactly how you want it (saved automatically).
 - **Smart Display:** Get real-time feedback. The app updates the track title on your watch to show `[ ON ]` or `[ OFF ]` so you always know your automation states.
 - **Auto-Focus:** Automatically reclaims the smartband's media controls whenever a third-party media app is paused on your phone.
@@ -44,11 +47,13 @@ For detailed setup guides:
 1. **Download:** Get the latest `.apk` from the Releases tab.
 2. **Permissions:** Open the **Settings** tab in the app. 
    - Enable **Hijack Band Focus** (this requests Notification Access so the app can intercept watch commands).
+   - *For Automation Sync:* Enable Google Calendar Sync and choose your preferred background update interval (from 15m up to 24h).
    - If you want to use the hardware features, enable Camera and Audio permissions here as well.
 3. **Create Automations:** Go to the **Automations** tab and hit the `+` button.
    - *For Organization:* Select "Create Folder" and drag items to reorder them.
    - *For Smart Home:* Select "HTTP Webhook" and paste your trigger URL.
    - *For PC Power:* Select "Wake on LAN (PC)" and input your computer's MAC Address.
+   - *For Routine/Tasks:* Select "Alarm (Smartband)" or "Counter".
    - *For Hardware:* Select "Hidden Camera" or "Audio Recorder".
 4. **Trigger it!** Pause any media playing on your phone. Band Trigger will take over the watch screen. Use the media buttons on your wrist to run your automations.
 
@@ -59,6 +64,7 @@ For detailed setup guides:
 **Architecture**
 - **UI & Navigation:** Fragment-based architecture (`Settings`, `Automations`, `About`) with `ViewPager2` transitions. Features a `RecyclerView` with `ItemTouchHelper` for drag-and-drop folder management.
 - **Media Interception:** Uses `NotificationListenerService` and `MediaSessionManager` to detect paused media. It pushes an empty, high-priority media session to take over the smartband display, updating the `MediaMetadata` dynamically to reflect ON/OFF states.
+- **Background Tasks:** Utilizes Android's `WorkManager` for lightweight, interval-based ghost syncing with the local `CalendarContract` provider.
 
 ---
 
@@ -87,6 +93,9 @@ O Band Trigger é um aplicativo Android criado para expandir as capacidades da s
 ### ✨ Funcionalidades
 - **Webhooks (Casa Inteligente):** Controle luzes, tomadas ou rotinas do IFTTT com facilidade.
 - **Wake on LAN (WoL):** Ligue seu PC remotamente direto do pulso.
+- **Sincronização com Google Agenda:** Um serviço em segundo plano lê automaticamente os eventos das suas próximas 24 horas e os converte em alarmes para a smartband dentro de uma pasta dedicada.
+- **Alarmes para Smartband:** Crie alarmes offline independentes com suporte a repetição por dias da semana, disparando alertas de vibração de alta prioridade no pulso até serem desarmados.
+- **Contador Persistente:** Automações de contagem agora geram uma notificação de acompanhamento em tempo real no celular, com um botão de atalho para zerar.
 - **Pastas e Layout Customizável:** Organize suas automações em pastas. Arraste e solte os itens para personalizar a ordem do seu jeito (o layout é salvo automaticamente).
 - **Visor Inteligente:** Feedback em tempo real. O app atualiza o nome da música no relógio para mostrar `[ ON ]` (Ligado) ou `[ OFF ]` (Desligado), indicando o estado atual da automação.
 - **Foco Automático:** Assume os controles de mídia da smartband sempre que uma música ou vídeo for pausado no celular.
@@ -113,12 +122,14 @@ Para um guia mais detalhado:
 1. **Baixar:** Baixe o `.apk` mais recente na aba de Releases.
 2. **Permissões:** Abra a aba **Settings** no app.
    - Ative o **Hijack Band Focus** (isso solicitará acesso às notificações para que o app consiga ler os comandos do relógio).
+   - *Para Automações de Agenda:* Ative o Google Calendar Sync e escolha a frequência de atualização em segundo plano (de 15m até 24h).
    - Se quiser usar os recursos de hardware, ative as permissões de Câmera e Áudio nesta mesma tela.
 3. **Criar Automações:** Vá na aba **Automations** e toque no botão `+`.
    - *Para Organizar:* Escolha "Create Folder" e arraste os itens para reordená-los.
    - *Para Casa Inteligente:* Escolha "HTTP Webhook" e insira a URL do seu dispositivo.
    - *Para Ligar o PC:* Escolhe "Wake on LAN (PC)" e digite o MAC Address da sua placa de rede.
-   - *Para Hardware:* Escolha "Câmera Oculta" ou "Gravador de Áudio".
+   - *Para Rotinas/Tarefas:* Escolha "Alarm (Smartband)" ou "Counter".
+   - *Para Hardware:* Escolha "Hidden Camera" ou "Audio Recorder".
 4. **Acione!** Pause qualquer mídia que estiver tocando no celular. O app assumirá a tela do relógio. Use os botões no pulso para disparar suas automações.
 
 ---
@@ -128,6 +139,7 @@ Para um guia mais detalhado:
 **Arquitetura**
 - **UI e Navegação:** Arquitetura baseada em Fragments (`Settings`, `Automations`, `About`) com transições usando `ViewPager2`. Sistema de drag-and-drop integrado com `RecyclerView` e `ItemTouchHelper` para o gerenciamento de pastas.
 - **Interceptação de Mídia:** Utiliza `NotificationListenerService` e `MediaSessionManager` para detectar pausas. Ele envia uma sessão de mídia vazia de alta prioridade para assumir a tela do relógio, alterando os metadados (ON/OFF) de forma dinâmica.
+- **Processos em Segundo Plano:** Utiliza o `WorkManager` do Android para realizar sincronizações fantasmas baseadas em intervalo diretamente com o provedor local do `CalendarContract`.
 
 ---
 
