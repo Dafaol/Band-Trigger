@@ -1,146 +1,184 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#2C2C2C"
-    android:orientation="vertical"
-    android:padding="24dp">
+    app:cardBackgroundColor="#2C2C2C"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="16dp">
 
-    <TextView
-        android:id="@+id/textDialogTitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:text="New Automation"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold" />
-
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
-        app:boxStrokeColor="#BB86FC"
-        android:hint="Action Type"
-        android:textColorHint="#AAAAAA">
-
-        <AutoCompleteTextView
-            android:id="@+id/dropdownAction"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="none"
-            android:textColor="#FFFFFF" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
-        app:boxStrokeColor="#BB86FC"
-        android:hint="Select Folder (Optional)"
-        android:textColorHint="#AAAAAA">
-
-        <AutoCompleteTextView
-            android:id="@+id/dropdownFolder"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="none"
-            android:textColor="#FFFFFF" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <EditText
-        android:id="@+id/editName"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
-        android:backgroundTint="#BB86FC"
-        android:hint="Name (e.g. Bedroom Light)"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#AAAAAA" />
-
-    <!-- LAYOUT PADRÃO (Webhooks e WOL) -->
     <LinearLayout
-        android:id="@+id/layoutUrls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <EditText
-            android:id="@+id/editUrlTurnOn"
+        <!-- Header -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:backgroundTint="#BB86FC"
-            android:hint="Turn On URL (Webhook)"
-            android:inputType="textUri"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#AAAAAA" />
+            android:background="#151515"
+            android:padding="20dp">
+            <TextView
+                android:id="@+id/textDialogTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="New Automation"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
-        <EditText
-            android:id="@+id/editUrlTurnOff"
+        <!-- Body -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:backgroundTint="#BB86FC"
-            android:hint="Turn Off URL (Optional)"
-            android:inputType="textUri"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#AAAAAA" />
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxStrokeColor="#BB86FC"
+                android:hint="Action Type"
+                android:textColorHint="#AAAAAA">
+                <AutoCompleteTextView
+                    android:id="@+id/dropdownAction"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:textColor="#FFFFFF" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxStrokeColor="#BB86FC"
+                android:hint="Select Folder (Optional)"
+                android:textColorHint="#AAAAAA">
+                <AutoCompleteTextView
+                    android:id="@+id/dropdownFolder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:textColor="#FFFFFF" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <EditText
+                android:id="@+id/editName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:backgroundTint="#BB86FC"
+                android:hint="Name (e.g. Bedroom Light)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA" />
+
+            <!-- LAYOUT PADRÃO -->
+            <LinearLayout
+                android:id="@+id/layoutUrls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <EditText
+                    android:id="@+id/editUrlTurnOn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:backgroundTint="#BB86FC"
+                    android:hint="Turn On URL (Webhook)"
+                    android:inputType="textUri"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA" />
+                <EditText
+                    android:id="@+id/editUrlTurnOff"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="#BB86FC"
+                    android:hint="Turn Off URL (Optional)"
+                    android:inputType="textUri"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA" />
+            </LinearLayout>
+
+            <!-- LAYOUT ALARME -->
+            <LinearLayout
+                android:id="@+id/layoutAlarmConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Alarm Time"
+                    android:textColor="#AAAAAA"
+                    android:layout_marginBottom="4dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:padding="16dp"
+                    android:text="Tap to Set Time"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    app:backgroundTint="#151515"
+                    app:strokeColor="#BB86FC"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Repeat Days"
+                    android:textColor="#AAAAAA"
+                    android:layout_marginBottom="4dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectDays"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:text="Repeat: Never"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    app:backgroundTint="#151515"
+                    app:strokeColor="#BB86FC"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Footer -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#151515"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:padding="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancelAuto"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancel"
+                android:textColor="#FFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveAuto"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:textStyle="bold"
+                android:textColor="#BB86FC" />
+        </LinearLayout>
     </LinearLayout>
-
-    <!-- NOVO: LAYOUT EXCLUSIVO DO ALARME LIMPO E POLIDO -->
-    <LinearLayout
-        android:id="@+id/layoutAlarmConfig"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <!-- Título do Horário -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Alarm Time"
-            android:textColor="#AAAAAA"
-            android:layout_marginBottom="4dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelectTime"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:padding="16dp"
-            android:text="Tap to Set Time"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            app:backgroundTint="#151515"
-            app:strokeColor="#BB86FC"
-            app:strokeWidth="1dp"
-            app:cornerRadius="12dp" />
-
-        <!-- Título dos Dias -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Repeat Days"
-            android:textColor="#AAAAAA"
-            android:layout_marginBottom="4dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelectDays"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:padding="16dp"
-            android:text="Repeat: Never"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            app:backgroundTint="#151515"
-            app:strokeColor="#BB86FC"
-            app:strokeWidth="1dp"
-            app:cornerRadius="12dp" />
-    </LinearLayout>
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

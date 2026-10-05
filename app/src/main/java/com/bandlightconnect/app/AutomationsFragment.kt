@@ -12,6 +12,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -120,24 +121,26 @@ class AutomationsFragment : Fragment() {
                 }
             }
         }
-
         foldersList.forEach { if (!addedIds.contains(it.id)) displayList.add(UiItem.FolderItem(it)) }
         automationsList.filter { it.folderId == null }.forEach { if (!addedIds.contains(it.id)) displayList.add(UiItem.AutomationItem(it)) }
-
         adapter.updateData(displayList)
     }
 
     private fun syncRootListsWithAdapter() {
         val currentUiItems = adapter.getItems()
         saveRootOrder(currentUiItems)
+
         val newFolders = currentUiItems.filterIsInstance<UiItem.FolderItem>().map { it.folder }
         val newRootAutos = currentUiItems.filterIsInstance<UiItem.AutomationItem>().map { it.automation }
+
         foldersList.clear()
         foldersList.addAll(newFolders)
+
         val folderAutos = automationsList.filter { it.folderId != null }
         automationsList.clear()
         automationsList.addAll(newRootAutos)
         automationsList.addAll(folderAutos)
+
         saveFolders()
         saveAutomations()
         requireActivity().startService(Intent(requireContext(), MediaService::class.java))
@@ -149,7 +152,9 @@ class AutomationsFragment : Fragment() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
-        dialog.findViewById<android.widget.TextView>(R.id.tvOptionsTitle).text = folder.name
+
+        dialog.findViewById<TextView>(R.id.tvOptionsTitle).text = folder.name
+
         dialog.findViewById<View>(R.id.optionRenameFolder).setOnClickListener {
             dialog.dismiss()
             showRenameFolderDialog(folder)
@@ -162,27 +167,27 @@ class AutomationsFragment : Fragment() {
     }
 
     private fun showRenameFolderDialog(folder: Folder) {
-        val input = EditText(requireContext()).apply {
-            setText(folder.name)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-        }
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Rename Folder")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val newName = input.text.toString().trim()
-                if (newName.isNotEmpty()) {
-                    folder.name = newName
-                    foldersMap[folder.id] = newName
-                    saveFolders()
-                    rebuildRootUiList()
-                    requireActivity().startService(Intent(requireContext(), MediaService::class.java))
-                }
-            }.setNegativeButton("Cancel", null).create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(R.layout.dialog_create_folder)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
+        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        dialog.findViewById<TextView>(R.id.tvFolderDialogTitle).text = "Rename Folder"
+        val editName = dialog.findViewById<EditText>(R.id.editFolderName)
+        editName.setText(folder.name)
+
+        dialog.findViewById<View>(R.id.btnCancelFolder).setOnClickListener { dialog.dismiss() }
+        dialog.findViewById<View>(R.id.btnSaveFolder).setOnClickListener {
+            val newName = editName.text.toString().trim()
+            if (newName.isNotEmpty()) {
+                folder.name = newName
+                foldersMap[folder.id] = newName
+                saveFolders()
+                rebuildRootUiList()
+                requireActivity().startService(Intent(requireContext(), MediaService::class.java))
+                dialog.dismiss()
+            }
         }
         dialog.show()
     }
@@ -201,6 +206,7 @@ class AutomationsFragment : Fragment() {
                 requireActivity().startService(Intent(requireContext(), MediaService::class.java))
                 Toast.makeText(requireContext(), "Folder deleted and automations moved to root", Toast.LENGTH_LONG).show()
             }.setNegativeButton("Cancel", null).create()
+
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.parseColor("#FF5252"))
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
@@ -215,8 +221,9 @@ class AutomationsFragment : Fragment() {
         val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-        dialog.findViewById<android.widget.TextView>(R.id.tvFolderTitle).text = folder.name
-        dialog.findViewById<android.widget.ImageButton>(R.id.btnFolderBack).setOnClickListener { dialog.dismiss() }
+        dialog.findViewById<TextView>(R.id.tvFolderTitle).text = folder.name
+        dialog.findViewById<View>(R.id.btnFolderBack).setOnClickListener { dialog.dismiss() }
+
         dialog.findViewById<View>(R.id.btnFolderAdd).setOnClickListener {
             dialog.dismiss()
             showAddEditAutomationDialog(null, folder.id)
@@ -242,6 +249,7 @@ class AutomationsFragment : Fragment() {
                 requireActivity().startService(Intent(requireContext(), MediaService::class.java))
             }
         )
+
         val rvFolder = dialog.findViewById<RecyclerView>(R.id.rvFolderAutomations)
         rvFolder.layoutManager = LinearLayoutManager(requireContext())
         rvFolder.adapter = folderAdapter
@@ -267,14 +275,17 @@ class AutomationsFragment : Fragment() {
     }
 
     private fun showAddOptionsDialog() {
-        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_select_action, null)
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setView(dialogView).create()
-        dialogView.findViewById<View>(R.id.optionAddAutomation).setOnClickListener {
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(R.layout.dialog_select_action)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
+        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        dialog.findViewById<View>(R.id.optionAddAutomation).setOnClickListener {
             dialog.dismiss()
             showAddEditAutomationDialog(null, null)
         }
-        dialogView.findViewById<View>(R.id.optionCreateFolder).setOnClickListener {
+        dialog.findViewById<View>(R.id.optionCreateFolder).setOnClickListener {
             dialog.dismiss()
             showCreateFolderDialog()
         }
@@ -282,27 +293,25 @@ class AutomationsFragment : Fragment() {
     }
 
     private fun showCreateFolderDialog() {
-        val input = EditText(requireContext()).apply {
-            hint = "Folder Name"
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-        }
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("New Folder")
-            .setView(input)
-            .setPositiveButton("Create") { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isNotEmpty()) {
-                    foldersList.add(Folder(name = name))
-                    saveFolders()
-                    loadData()
-                    rebuildRootUiList()
-                    requireActivity().startService(Intent(requireContext(), MediaService::class.java))
-                }
-            }.setNegativeButton("Cancel", null).create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(R.layout.dialog_create_folder)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
+        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        val editName = dialog.findViewById<EditText>(R.id.editFolderName)
+
+        dialog.findViewById<View>(R.id.btnCancelFolder).setOnClickListener { dialog.dismiss() }
+        dialog.findViewById<View>(R.id.btnSaveFolder).setOnClickListener {
+            val name = editName.text.toString().trim()
+            if (name.isNotEmpty()) {
+                foldersList.add(Folder(name = name))
+                saveFolders()
+                loadData()
+                rebuildRootUiList()
+                requireActivity().startService(Intent(requireContext(), MediaService::class.java))
+                dialog.dismiss()
+            }
         }
         dialog.show()
     }
@@ -347,26 +356,26 @@ class AutomationsFragment : Fragment() {
         dialog.show()
     }
 
-    // Função unificada para Adicionar ou Editar
     private fun showAddEditAutomationDialog(existingAutomation: Automation?, preSelectedFolderId: String?) {
-        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_new_automation, null)
-        dialogView.findViewById<android.widget.TextView>(R.id.textDialogTitle).text = if (existingAutomation == null) "New Automation" else "Edit Automation"
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(R.layout.dialog_new_automation)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
+        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-        val editName = dialogView.findViewById<EditText>(R.id.editName)
-        val editUrlOn = dialogView.findViewById<EditText>(R.id.editUrlTurnOn)
-        val editUrlOff = dialogView.findViewById<EditText>(R.id.editUrlTurnOff)
-        val layoutUrls = dialogView.findViewById<View>(R.id.layoutUrls)
+        dialog.findViewById<TextView>(R.id.textDialogTitle).text = if (existingAutomation == null) "New Automation" else "Edit Automation"
 
-        val layoutAlarmConfig = dialogView.findViewById<View>(R.id.layoutAlarmConfig)
-        val btnSelectTime = dialogView.findViewById<MaterialButton>(R.id.btnSelectTime)
-        val btnSelectDays = dialogView.findViewById<MaterialButton>(R.id.btnSelectDays)
-
-        val dropdownAction = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdownAction)
-        val dropdownFolder = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdownFolder)
+        val editName = dialog.findViewById<EditText>(R.id.editName)
+        val editUrlOn = dialog.findViewById<EditText>(R.id.editUrlTurnOn)
+        val editUrlOff = dialog.findViewById<EditText>(R.id.editUrlTurnOff)
+        val layoutUrls = dialog.findViewById<View>(R.id.layoutUrls)
+        val layoutAlarmConfig = dialog.findViewById<View>(R.id.layoutAlarmConfig)
+        val btnSelectTime = dialog.findViewById<MaterialButton>(R.id.btnSelectTime)
+        val btnSelectDays = dialog.findViewById<MaterialButton>(R.id.btnSelectDays)
+        val dropdownAction = dialog.findViewById<AutoCompleteTextView>(R.id.dropdownAction)
+        val dropdownFolder = dialog.findViewById<AutoCompleteTextView>(R.id.dropdownFolder)
 
         var selectedAlarmTime = ""
-
-        // Lógica dos Dias da Semana com o Dialog customizado
         val daysShort = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
         val selectedDays = BooleanArray(7)
 
@@ -381,10 +390,7 @@ class AutomationsFragment : Fragment() {
         btnSelectDays.setOnClickListener {
             val daysDialog = android.app.Dialog(requireContext())
             daysDialog.setContentView(R.layout.dialog_select_days)
-
-            // Isso garante que os cantos arredondados do XML apareçam corretamente
             daysDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-            val width = (resources.displayMetrics.widthPixels * 0.90).toInt()
             daysDialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
 
             val chks = arrayOf(
@@ -394,7 +400,6 @@ class AutomationsFragment : Fragment() {
                 daysDialog.findViewById<CheckBox>(R.id.chkDay6)
             )
 
-            // Carrega estado visual atual
             for (i in selectedDays.indices) {
                 chks[i].isChecked = selectedDays[i]
             }
@@ -402,7 +407,6 @@ class AutomationsFragment : Fragment() {
             daysDialog.findViewById<View>(R.id.btnCancelDays).setOnClickListener {
                 daysDialog.dismiss()
             }
-
             daysDialog.findViewById<View>(R.id.btnSaveDays).setOnClickListener {
                 for (i in selectedDays.indices) {
                     selectedDays[i] = chks[i].isChecked
@@ -410,11 +414,9 @@ class AutomationsFragment : Fragment() {
                 updateDaysText()
                 daysDialog.dismiss()
             }
-
             daysDialog.show()
         }
 
-        // Configura o relógio (TimePicker) nativo
         btnSelectTime.setOnClickListener {
             val c = java.util.Calendar.getInstance()
             android.app.TimePickerDialog(requireContext(), { _, hour, minute ->
@@ -423,13 +425,11 @@ class AutomationsFragment : Fragment() {
             }, c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE), true).show()
         }
 
-        // Se for edição, carrega os dados
         if (existingAutomation != null) {
             editName.setText(existingAutomation.name)
             if (existingAutomation.type == "ALARM") {
                 selectedAlarmTime = existingAutomation.webhookUrlOn
                 btnSelectTime.text = if (selectedAlarmTime.isNotEmpty()) selectedAlarmTime else "Tap to Set Time"
-
                 val daysList = existingAutomation.alarmDays.split(",").filter { it.isNotEmpty() }
                 daysList.forEach { dayStr ->
                     val dayInt = dayStr.toIntOrNull()
@@ -448,10 +448,10 @@ class AutomationsFragment : Fragment() {
 
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
-                return (super.getView(pos, convertView, parent) as android.widget.TextView).apply { setTextColor(if (enabledFlags[pos]) Color.WHITE else Color.GRAY) }
+                return (super.getView(pos, convertView, parent) as TextView).apply { setTextColor(if (enabledFlags[pos]) Color.WHITE else Color.GRAY) }
             }
             override fun getDropDownView(pos: Int, convertView: View?, parent: ViewGroup): View {
-                return (super.getDropDownView(pos, convertView, parent) as android.widget.TextView).apply { setTextColor(if (enabledFlags[pos]) Color.WHITE else Color.GRAY) }
+                return (super.getDropDownView(pos, convertView, parent) as TextView).apply { setTextColor(if (enabledFlags[pos]) Color.WHITE else Color.GRAY) }
             }
         })
 
@@ -459,11 +459,9 @@ class AutomationsFragment : Fragment() {
         val typeIndex = if (existingAutomation != null) typeMap[existingAutomation.type] ?: 0 else 0
         dropdownAction.setText(actionOptions[typeIndex], false)
 
-        // Lógica visual baseada no tipo selecionado
         fun updateLayoutVisibility(pos: Int) {
             layoutAlarmConfig.visibility = if (pos == 5) View.VISIBLE else View.GONE
             layoutUrls.visibility = if (pos == 1 || pos == 2 || pos == 4 || pos == 5) View.GONE else View.VISIBLE
-
             if (pos == 3) {
                 editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
                 editUrlOff.visibility = View.GONE
@@ -489,61 +487,54 @@ class AutomationsFragment : Fragment() {
         val initialFolderId = existingAutomation?.folderId ?: preSelectedFolderId
         dropdownFolder.setText(foldersMap[initialFolderId] ?: "Root (No Folder)", false)
 
-        val dialog = AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setView(dialogView)
-            .setPositiveButton("Save") { _, _ ->
-                val name = editName.text.toString()
-                var urlOn = editUrlOn.text.toString()
-                var urlOff = editUrlOff.text.toString()
-                var savedAlarmDays = ""
+        dialog.findViewById<View>(R.id.btnCancelAuto).setOnClickListener { dialog.dismiss() }
 
-                val selectedAction = dropdownAction.text.toString()
-                val folderId = foldersList.find { it.name == dropdownFolder.text.toString() }?.id
-                var autoType = "WEBHOOK"
+        dialog.findViewById<View>(R.id.btnSaveAuto).setOnClickListener {
+            val name = editName.text.toString()
+            var urlOn = editUrlOn.text.toString()
+            var urlOff = editUrlOff.text.toString()
+            var savedAlarmDays = ""
+            val selectedAction = dropdownAction.text.toString()
+            val folderId = foldersList.find { it.name == dropdownFolder.text.toString() }?.id
+            var autoType = "WEBHOOK"
 
-                if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
-                else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
-                else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
-                else if (selectedAction == "Counter") { urlOn = "COUNT"; urlOff = ""; autoType = "COUNTER" }
-                else if (selectedAction == "Alarm (Smartband)") {
-                    autoType = "ALARM"
-                    urlOn = selectedAlarmTime
-                    urlOff = ""
+            if (selectedAction == "Hidden Camera") { urlOn = "CAMERA"; urlOff = ""; autoType = "CAMERA" }
+            else if (selectedAction == "Audio Recorder") { urlOn = "RECORD"; urlOff = "RECORD"; autoType = "AUDIO" }
+            else if (selectedAction == "Wake on LAN (PC)") { autoType = "WOL" }
+            else if (selectedAction == "Counter") { urlOn = "COUNT"; urlOff = ""; autoType = "COUNTER" }
+            else if (selectedAction == "Alarm (Smartband)") {
+                autoType = "ALARM"
+                urlOn = selectedAlarmTime
+                urlOff = ""
+                val selectedDaysList = mutableListOf<Int>()
+                for (i in selectedDays.indices) { if (selectedDays[i]) selectedDaysList.add(i + 1) }
+                savedAlarmDays = selectedDaysList.joinToString(",")
+            }
 
-                    // Constrói a string de dias a partir da lista
-                    val selectedDaysList = mutableListOf<Int>()
-                    for (i in selectedDays.indices) { if (selectedDays[i]) selectedDaysList.add(i + 1) }
-                    savedAlarmDays = selectedDaysList.joinToString(",")
-                }
-
-                if (name.isNotEmpty() && urlOn.isNotEmpty()) {
-                    if (existingAutomation == null) {
-                        automationsList.add(Automation(
-                            name = name, type = autoType, webhookUrlOn = urlOn, webhookUrlOff = urlOff,
-                            isToggle = urlOff.isNotEmpty(), folderId = folderId, alarmDays = savedAlarmDays
-                        ))
-                    } else {
-                        existingAutomation.name = name; existingAutomation.type = autoType
-                        existingAutomation.webhookUrlOn = urlOn; existingAutomation.webhookUrlOff = urlOff
-                        existingAutomation.isToggle = urlOff.isNotEmpty(); existingAutomation.folderId = folderId
-                        existingAutomation.alarmDays = savedAlarmDays
-                    }
-                    saveAutomations()
-                    rebuildRootUiList()
-                    requireActivity().startService(Intent(requireContext(), MediaService::class.java))
-
-                    if (existingAutomation == null && preSelectedFolderId != null) {
-                        val folderToReopen = foldersList.find { it.id == preSelectedFolderId }
-                        if (folderToReopen != null) openFolderDialog(folderToReopen)
-                    }
+            if (name.isNotEmpty() && urlOn.isNotEmpty()) {
+                if (existingAutomation == null) {
+                    automationsList.add(Automation(
+                        name = name, type = autoType, webhookUrlOn = urlOn, webhookUrlOff = urlOff,
+                        isToggle = urlOff.isNotEmpty(), folderId = folderId, alarmDays = savedAlarmDays
+                    ))
                 } else {
-                    Toast.makeText(requireContext(), "Name and Time/URL cannot be empty", Toast.LENGTH_SHORT).show()
+                    existingAutomation.name = name; existingAutomation.type = autoType
+                    existingAutomation.webhookUrlOn = urlOn; existingAutomation.webhookUrlOff = urlOff
+                    existingAutomation.isToggle = urlOff.isNotEmpty(); existingAutomation.folderId = folderId
+                    existingAutomation.alarmDays = savedAlarmDays
                 }
-            }.setNegativeButton("Cancel", null).create()
+                saveAutomations()
+                rebuildRootUiList()
+                requireActivity().startService(Intent(requireContext(), MediaService::class.java))
 
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.WHITE)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.WHITE)
+                if (existingAutomation == null && preSelectedFolderId != null) {
+                    val folderToReopen = foldersList.find { it.id == preSelectedFolderId }
+                    if (folderToReopen != null) openFolderDialog(folderToReopen)
+                }
+                dialog.dismiss()
+            } else {
+                Toast.makeText(requireContext(), "Name and Time/URL cannot be empty", Toast.LENGTH_SHORT).show()
+            }
         }
         dialog.show()
     }

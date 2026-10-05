@@ -12,8 +12,8 @@ android {
         applicationId = "com.bandlightconnect.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 10
-        versionName = "1.6"
+        versionCode = 11
+        versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -40,6 +40,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Google CameraX
     val camerax_version = "1.3.1"

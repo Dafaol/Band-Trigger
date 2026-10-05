@@ -1,123 +1,186 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#121212"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:fillViewport="true">
 
-    <!-- Switch for Hijack Band Focus -->
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/switchHijackFocus"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Hijack Band Focus"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:thumbTint="@color/bottom_nav_colors" />
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Automatically takes over the smartwatch screen when other media is paused. If disabled, the app still works. However, you need to open the app whenever you pause media on your phone so that Band Trigger gains control of the watch's media playback."
-        android:textColor="#AAAAAA"
-        android:textSize="14sp" />
+        <!-- Switch for Hijack Band Focus -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchHijackFocus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Hijack Band Focus"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:thumbTint="@color/bottom_nav_colors" />
 
-    <!-- Line/Separator -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="24dp"
-        android:background="#2A2A2A" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Automatically takes over the smartwatch screen when other media is paused. If disabled, the app still works. However, you need to open the app whenever you pause media on your phone so that Band Trigger gains control of the watch's media playback."
+            android:textColor="#AAAAAA"
+            android:textSize="14sp" />
 
-    <!-- Extra Modules -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Extra Modules (Smartband)"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        <!-- Line/Separator -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="24dp"
+            android:background="#2A2A2A" />
 
-    <!-- Hidden Camera Switch -->
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/switchHiddenCamera"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Hidden Camera"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        app:thumbTint="@color/bottom_nav_colors" />
+        <!-- Extra Modules -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Extra Modules (Smartband)"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Allows creating automations to silently take pictures and save them to the gallery."
-        android:textColor="#888888"
-        android:textSize="14sp" />
+        <!-- Hidden Camera Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchHiddenCamera"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Hidden Camera"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            app:thumbTint="@color/bottom_nav_colors" />
 
-    <!-- Audio Recorder Switch -->
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/switchAudioRecorder"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Audio Recorder"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        app:thumbTint="@color/bottom_nav_colors" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Allows creating automations to silently take pictures and save them to the gallery."
+            android:textColor="#888888"
+            android:textSize="14sp" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Allows creating automations to record audio via microphone (Play starts, Pause stops)."
-        android:textColor="#888888"
-        android:textSize="14sp" />
+        <!-- Audio Recorder Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchAudioRecorder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Audio Recorder"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            app:thumbTint="@color/bottom_nav_colors" />
 
-    <!-- NOVO: Counter Notification Switch -->
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/switchCounterNotification"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Counter Notification"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        app:thumbTint="@color/bottom_nav_colors" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Allows creating automations to record audio via microphone (Play starts, Pause stops)."
+            android:textColor="#888888"
+            android:textSize="14sp" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Shows a persistent notification on your phone with the current count and a reset button."
-        android:textColor="#888888"
-        android:textSize="14sp" />
+        <!-- Counter Notification Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchCounterNotification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Counter Notification"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            app:thumbTint="@color/bottom_nav_colors" />
 
-    <!-- Line/Separator -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="32dp"
-        android:background="#2A2A2A" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Shows a persistent notification on your phone with the current count and a reset button."
+            android:textColor="#888888"
+            android:textSize="14sp" />
 
-    <!-- Exit Button -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnExitApp"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="24dp"
-        android:padding="12dp"
-        android:text="Turn Off and Exit"
-        android:textColor="#FF5252"
-        app:strokeColor="#FF5252" />
+        <!-- Calendar Sync Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchCalendarSync"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Google Calendar Sync"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            app:thumbTint="@color/bottom_nav_colors" />
 
-</LinearLayout>
+        <!-- Botão de Seleção de Intervalo (Oculto por padrão) -->
+        <LinearLayout
+            android:id="@+id/layoutSyncInterval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="12dp"
+            android:paddingHorizontal="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sync Interval"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/textSyncInterval"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="15 Minutes"
+                android:textColor="#BB86FC"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Automatically reads your upcoming events for the next 24 hours and creates alarms in a dedicated 'Google Calendar' folder."
+            android:textColor="#888888"
+            android:textSize="14sp" />
+
+        <!-- Spacer for pushing button to the bottom if screen is tall -->
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Line/Separator -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="32dp"
+            android:background="#2A2A2A" />
+
+        <!-- Exit Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExitApp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="24dp"
+            android:padding="12dp"
+            android:text="Turn Off and Exit"
+            android:textColor="#FF5252"
+            app:strokeColor="#FF5252" />
+
+    </LinearLayout>
+</ScrollView>
