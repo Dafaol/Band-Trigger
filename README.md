@@ -19,6 +19,7 @@ Band Trigger is an Android application designed to expand the capabilities of yo
 - **Smart Home Webhooks:** Control smart lights, plugs, or IFTTT routines easily.
 - **Wake on LAN (WoL):** Turn on your PC remotely directly from your wrist.
 - **Google Calendar Sync:** A background worker automatically reads your upcoming events for the next 24 hours and converts them into smartband alarms within a dedicated folder. 
+  > ⚠️ **Note:** The sync reads calendar **Events**, not Google Tasks or Reminders. Be sure to create your entries as "Events" with a set start time.
 - **Smartband Alarms:** Create standalone offline alarms with specific repeat days, triggering high-priority vibration alerts directly on your wrist until disarmed.
 - **Persistent Counter:** Counter automations feature a real-time tracking notification on your phone with a quick reset button.
 - **Folders & Custom Layout:** Organize your automations into folders. Drag and drop items to customize your layout exactly how you want it (saved automatically).
@@ -94,6 +95,7 @@ O Band Trigger é um aplicativo Android criado para expandir as capacidades da s
 - **Webhooks (Casa Inteligente):** Controle luzes, tomadas ou rotinas do IFTTT com facilidade.
 - **Wake on LAN (WoL):** Ligue seu PC remotamente direto do pulso.
 - **Sincronização com Google Agenda:** Um serviço em segundo plano lê automaticamente os eventos das suas próximas 24 horas e os converte em alarmes para a smartband dentro de uma pasta dedicada.
+  > ⚠️ **Aviso:** O app lê apenas **Eventos** da agenda, e não Tarefas (Google Tasks) ou Lembretes. Certifique-se de registrar seus alertas como "Eventos" com um horário definido de início.
 - **Alarmes para Smartband:** Crie alarmes offline independentes com suporte a repetição por dias da semana, disparando alertas de vibração de alta prioridade no pulso até serem desarmados.
 - **Contador Persistente:** Automações de contagem agora geram uma notificação de acompanhamento em tempo real no celular, com um botão de atalho para zerar.
 - **Pastas e Layout Customizável:** Organize suas automações em pastas. Arraste e solte os itens para personalizar a ordem do seu jeito (o layout é salvo automaticamente).
@@ -137,19 +139,4 @@ Para um guia mais detalhado:
 ### 💻 Para Desenvolvedores: Visão Técnica
 
 **Arquitetura**
-- **UI e Navegação:** Arquitetura baseada em Fragments (`Settings`, `Automations`, `About`) com transições usando `ViewPager2`. Sistema de drag-and-drop integrado com `RecyclerView` e `ItemTouchHelper` para o gerenciamento de pastas.
-- **Interceptação de Mídia:** Utiliza `NotificationListenerService` e `MediaSessionManager` para detectar pausas. Ele envia uma sessão de mídia vazia de alta prioridade para assumir a tela do relógio, alterando os metadados (ON/OFF) de forma dinâmica.
-- **Processos em Segundo Plano:** Utiliza o `WorkManager` do Android para realizar sincronizações fantasmas baseadas em intervalo diretamente com o provedor local do `CalendarContract`.
-
----
-
-### 💬 Limitações
-> Me esforcei para entregar um aplicativo estável e eficiente dentro das limitações de um projeto solo independente. **Sugestões de novas funcionalidades são sempre bem-vindas!** Tenham em mente que o sistema Android e os relógios possuem restrições técnicas, portanto a viabilidade de cada pedido precisa ser avaliada cuidadosamente.
-
----
-
-## ☕ Apoie o Projeto
-
-Se o app foi útil para você, considere apoiar o desenvolvimento!
-
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dafaolcreations)
+- **UI e Navegação:** Arquitetura baseada
