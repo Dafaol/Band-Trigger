@@ -1,28 +1,38 @@
 package com.bandlightconnect.app
 
+import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.UUID
 
 class MediaService : Service() {
-
     // Variáveis do Alarme
     private var isAlarmRinging = false
     private val alarmHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var alarmRunnable: Runnable? = null
     private val ALARM_NOTIFICATION_ID = 2002
-    private val ALARM_CHANNEL_ID = "AlarmChannelV3"
+    private val ALARM_CHANNEL_ID = "AlarmChannelV4"
 
     // Variáveis do Contador
     private var clickCounter = 0
@@ -30,13 +40,69 @@ class MediaService : Service() {
     private val COUNTER_NOTIFICATION_ID = 1001
     private val COUNTER_CHANNEL_ID = "CounterChannelV2"
 
+    // Variáveis do Fuel Tracker (GPS + Notificação)
+    private var locationManager: LocationManager? = null
+    private var lastLocation: Location? = null
+    private var isFuelTracking = false
+    private val FUEL_NOTIFICATION_ID = 3003
+    private val FUEL_CHANNEL_ID = "FuelTrackerChannelV1"
+
+    private val fuelLocationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            if (!isFuelTracking) return
+            if (location.hasAccuracy() && location.accuracy > 35f) return
+
+            val prev = lastLocation
+            if (prev != null) {
+                val distanceMeters = location.distanceTo(prev)
+                if (distanceMeters >= 5f) {
+                    val distanceKm = distanceMeters / 1000f
+                    val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+                    val avgKmL = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f).coerceAtLeast(1.0f)
+                    val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+                    val reserve = sharedPrefs.getFloat("FUEL_RESERVE", 2.0f)
+                    val currentLiters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+                    val currentTripKm = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+                    val currentOdo = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+                    val alreadyAlerted = sharedPrefs.getBoolean("FUEL_RESERVE_ALERTED", false)
+
+                    val litersUsed = distanceKm / avgKmL
+                    val newLiters = (currentLiters - litersUsed).coerceAtLeast(0.0f)
+                    val newTripKm = currentTripKm + distanceKm
+                    val newOdo = if (currentOdo > 0f) currentOdo + distanceKm else distanceKm
+
+                    val editor = sharedPrefs.edit()
+                        .putFloat("FUEL_CURRENT_LITERS", newLiters)
+                        .putFloat("FUEL_TRIP_KM", newTripKm)
+                        .putFloat("FUEL_ODOMETER", newOdo)
+
+                    // Dispara o alarme na pulseira automaticamente ao atingir a reserva
+                    if (newLiters <= reserve && !alreadyAlerted) {
+                        editor.putBoolean("FUEL_RESERVE_ALERTED", true)
+                        startAlarmLoop(String.format(Locale.US, "⛽ Reserve (%.1fL)", newLiters))
+                    }
+                    editor.apply()
+
+                    lastLocation = location
+                    updateWatchDisplay()
+                    updateFuelNotification()
+                }
+            } else {
+                lastLocation = location
+            }
+        }
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
+
     private var mediaSession: MediaSession? = null
     private lateinit var audioManager: AudioManager
     private val audioRecorder = AudioRecorderHelper()
 
     private val foldersList = mutableListOf<Folder>()
     private val automationList = mutableListOf<Automation>()
-
     private var currentFolderId: String? = null
     private val activeDisplayList = mutableListOf<BandDisplayItem>()
     private var currentIndex = 0
@@ -50,7 +116,15 @@ class MediaService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         mediaSession = MediaSession(this, "BandTriggerSession")
+
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        isFuelTracking = sharedPrefs.getBoolean("FUEL_TRACKING_ACTIVE", false)
+        if (isFuelTracking) {
+            startFuelGpsTracking()
+            updateFuelNotification()
+        }
 
         loadAutomationsFromMemory()
         rebuildDisplayList()
@@ -59,11 +133,9 @@ class MediaService : Service() {
             override fun onPlay() {
                 handlePlayPause()
             }
-
             override fun onPause() {
                 handlePlayPause()
             }
-
             override fun onSkipToNext() {
                 if (activeDisplayList.isNotEmpty()) {
                     currentIndex = (currentIndex + 1) % activeDisplayList.size
@@ -71,7 +143,6 @@ class MediaService : Service() {
                     syncPlaybackStateForCurrentItem()
                 }
             }
-
             override fun onSkipToPrevious() {
                 if (activeDisplayList.isNotEmpty()) {
                     currentIndex = if (currentIndex - 1 < 0) activeDisplayList.size - 1 else currentIndex - 1
@@ -86,38 +157,38 @@ class MediaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
         if (intent?.action == "ACTION_FIRE_ALARM") {
             val alarmName = intent.getStringExtra("ALARM_NAME") ?: "Lembrete"
             startAlarmLoop(alarmName)
             return START_STICKY
         }
 
-        // Se o comando for para zerar o contador através do botão na notificação
         if (intent?.action == "ACTION_RESET_COUNTER") {
             clickCounter = 0
-
-            // Destrói a notificação do celular para limpar a tela
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancel(COUNTER_NOTIFICATION_ID)
-
-            // Atualiza o visor do relógio para mostrar que zerou
             updateWatchDisplay()
+            return START_STICKY
+        }
 
+        if (intent?.action == "ACTION_TOGGLE_FUEL_TRIP") {
+            toggleFuelTripState()
+            return START_STICKY
+        }
+
+        if (intent?.action == "ACTION_REFRESH_FUEL") {
+            updateWatchDisplay()
+            if (isFuelTracking) updateFuelNotification()
             return START_STICKY
         }
 
         loadAutomationsFromMemory()
         rebuildDisplayList()
 
-        // A CORREÇÃO: O celular é a fonte absoluta da verdade.
-        // Se tem música tocando (transição rápida do 5G), apenas atualizamos a tela em silêncio.
         if (audioManager.isMusicActive) {
             mediaSession?.isActive = true
             updateWatchDisplay()
-            Log.d("BandTrigger", "Transição de faixa detectada. Foco mantido no player de música.")
         } else {
-            // Se está realmente em silêncio, o Band Trigger assume o controle.
             requestAudioFocus()
             mediaSession?.isActive = true
             updatePlaybackState(PlaybackState.STATE_PLAYING)
@@ -129,20 +200,108 @@ class MediaService : Service() {
         return START_STICKY
     }
 
+    private fun toggleFuelTripState() {
+        isFuelTracking = !isFuelTracking
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean("FUEL_TRACKING_ACTIVE", isFuelTracking).apply()
+
+        automationList.filter { it.type.equals("FUEL", ignoreCase = true) }.forEach {
+            it.currentState = isFuelTracking
+        }
+        saveAutomationsToMemory()
+
+        if (isFuelTracking) {
+            startFuelGpsTracking()
+            updatePlaybackState(PlaybackState.STATE_PLAYING)
+        } else {
+            stopFuelGpsTracking()
+            updatePlaybackState(PlaybackState.STATE_PAUSED)
+        }
+        updateFuelNotification()
+        updateWatchDisplay()
+    }
+
+    private fun startFuelGpsTracking() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                lastLocation = null
+                locationManager?.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    3000L,
+                    5f,
+                    fuelLocationListener
+                )
+            } catch (e: Exception) {
+                Log.e("BandTrigger", "Erro ao iniciar GPS do Fuel Tracker", e)
+            }
+        }
+    }
+
+    private fun stopFuelGpsTracking() {
+        try {
+            locationManager?.removeUpdates(fuelLocationListener)
+            lastLocation = null
+        } catch (e: Exception) {
+            Log.e("BandTrigger", "Erro ao parar GPS do Fuel Tracker", e)
+        }
+    }
+
+    private fun updateFuelNotification() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        if (!isFuelTracking) {
+            notificationManager.cancel(FUEL_NOTIFICATION_ID)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                FUEL_CHANNEL_ID,
+                "Band Trigger Fuel Tracker",
+                android.app.NotificationManager.IMPORTANCE_LOW
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+        val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+        val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
+        val tripKm = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+        val odoKm = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+        val rangeKm = (liters * avg).toInt()
+
+        val stopIntent = Intent(this, MediaService::class.java).apply {
+            action = "ACTION_TOGGLE_FUEL_TRIP"
+        }
+        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val stopPendingIntent = android.app.PendingIntent.getService(this, 2, stopIntent, pendingFlags)
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, FUEL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
+            .setContentTitle(String.format(Locale.US, "Fuel Tracker: %.2f L (~%d km)", liters, rangeKm))
+            .setContentText(String.format(Locale.US, "Trip: %.1f km | Odo: %.1f km", tripKm, odoKm))
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "Stop Trip", stopPendingIntent)
+
+        notificationManager.notify(FUEL_NOTIFICATION_ID, builder.build())
+    }
+
     private fun updateCounterNotification(automationName: String) {
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val isNotifEnabled = sharedPrefs.getBoolean("COUNTER_NOTIFICATION_ENABLED", false)
-
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
 
-        // Se a opção estiver desligada, destrói a notificação
         if (!isNotifEnabled) {
             notificationManager.cancel(COUNTER_NOTIFICATION_ID)
             return
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // MUDANÇA 1: IMPORTANCE_DEFAULT para o relógio não ignorar a notificação
             val channel = android.app.NotificationChannel(
                 COUNTER_CHANNEL_ID,
                 "Band Trigger Counter",
@@ -152,27 +311,21 @@ class MediaService : Service() {
         }
 
         val builder = androidx.core.app.NotificationCompat.Builder(this, COUNTER_CHANNEL_ID)
-            // MUDANÇA 2: Usando o ícone de lista do próprio app para não bugar no Android
             .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
-            // MUDANÇA 3: Nome do app explícito no título para não causar confusão
-            .setContentTitle("$automationName")
+            .setContentTitle(automationName)
             .setContentText("Count: $clickCounter")
-            .setOnlyAlertOnce(true) // Impede que o celular apite a cada novo clique
-            // MUDANÇA 4: Removemos o setOngoing(true) para o relógio aceitar receber
+            .setOnlyAlertOnce(true)
             .setAutoCancel(false)
 
-        // Adiciona o botão de Reset apenas se o contador for maior que 0
         if (clickCounter > 0) {
             val resetIntent = Intent(this, MediaService::class.java).apply {
                 action = "ACTION_RESET_COUNTER"
             }
-
             val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
             } else {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT
             }
-
             val resetPendingIntent = android.app.PendingIntent.getService(this, 1, resetIntent, pendingFlags)
             builder.addAction(android.R.drawable.ic_menu_revert, "Reset", resetPendingIntent)
         }
@@ -208,20 +361,19 @@ class MediaService : Service() {
             val jsonArray = JSONArray(sharedPrefs.getString("AUTOMATIONS_LIST", "[]"))
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
+                val type = obj.optString("type", "WEBHOOK")
                 val automation = Automation(
                     id = obj.optString("id", UUID.randomUUID().toString()),
                     name = obj.getString("name"),
-                    type = obj.optString("type", "WEBHOOK"),
+                    type = type,
                     webhookUrlOn = obj.optString("webhookUrlOn", ""),
                     webhookUrlOff = obj.optString("webhookUrlOff", ""),
                     isToggle = obj.optBoolean("isToggle", false),
-                    currentState = obj.optBoolean("currentState", false),
+                    currentState = if (type == "FUEL") isFuelTracking else obj.optBoolean("currentState", false),
                     folderId = if (obj.has("folderId") && !obj.isNull("folderId")) obj.getString("folderId") else null,
                     alarmDays = obj.optString("alarmDays", "")
                 )
                 automationList.add(automation)
-
-                // NOVO: Se for um alarme, já agenda ele ao carregar a memória!
                 if (automation.type == "ALARM") {
                     scheduleAlarm(automation)
                 }
@@ -231,12 +383,10 @@ class MediaService : Service() {
 
     private fun rebuildDisplayList() {
         activeDisplayList.clear()
-
         if (currentFolderId == null) {
             val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
             val orderArrayStr = sharedPrefs.getString("ROOT_UI_ORDER", "[]")
             val orderArray = JSONArray(orderArrayStr)
-
             val addedIds = mutableSetOf<String>()
 
             for (i in 0 until orderArray.length()) {
@@ -257,10 +407,8 @@ class MediaService : Service() {
                     }
                 }
             }
-
             foldersList.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.FolderItem(it)) }
             automationList.filter { it.folderId == null }.forEach { if (!addedIds.contains(it.id)) activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
-
         } else {
             automationList.filter { it.folderId == currentFolderId }.forEach { activeDisplayList.add(BandDisplayItem.AutomationItem(it)) }
             activeDisplayList.add(BandDisplayItem.BackItem)
@@ -271,16 +419,8 @@ class MediaService : Service() {
     }
 
     private fun handlePlayPause() {
-        // NOVO: Se o alarme estiver tocando, o Play/Pause serve como botão de "Desarmar"
         if (isAlarmRinging) {
-            isAlarmRinging = false
-            alarmRunnable?.let { alarmHandler.removeCallbacks(it) }
-
-            val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notifManager.cancel(ALARM_NOTIFICATION_ID)
-
-            updatePlaybackState(PlaybackState.STATE_PAUSED)
-            updateWatchDisplay() // Volta a tela ao normal
+            stopAlarmLoop()
             return
         }
 
@@ -301,8 +441,12 @@ class MediaService : Service() {
             }
             is BandDisplayItem.AutomationItem -> {
                 val currentAutomation = item.automation
-                currentAutomation.currentState = !currentAutomation.currentState
+                if (currentAutomation.type.equals("FUEL", ignoreCase = true)) {
+                    toggleFuelTripState()
+                    return
+                }
 
+                currentAutomation.currentState = !currentAutomation.currentState
                 saveAutomationsToMemory()
 
                 if (currentAutomation.type.equals("COUNTER", ignoreCase = true)) {
@@ -311,15 +455,12 @@ class MediaService : Service() {
                     updateCounterNotification(lastCounterName)
                     updateWatchDisplay()
                 } else if (currentAutomation.type.equals("ALARM", ignoreCase = true)) {
-                    // Disparo manual para testar o visual do alarme!
                     startAlarmLoop(currentAutomation.name)
                 } else {
                     if (currentAutomation.currentState) {
-                        Log.d("BandTrigger", "Smart Toggle: TURN ON")
                         updatePlaybackState(PlaybackState.STATE_PLAYING)
                         triggerCurrentWebhook(currentAutomation, isTurnOn = true)
                     } else {
-                        Log.d("BandTrigger", "Smart Toggle: TURN OFF")
                         updatePlaybackState(PlaybackState.STATE_PAUSED)
                         triggerCurrentWebhook(currentAutomation, isTurnOn = false)
                     }
@@ -328,7 +469,6 @@ class MediaService : Service() {
             }
         }
     }
-
 
     private fun syncPlaybackStateForCurrentItem() {
         if (activeDisplayList.isEmpty()) return
@@ -355,30 +495,37 @@ class MediaService : Service() {
             is BandDisplayItem.BackItem -> {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ \uD83D\uDD19 Exit Folder ]")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 🔙 Exit Folder ]")
                     .build()
                 mediaSession?.setMetadata(metadata)
             }
             is BandDisplayItem.FolderItem -> {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ \uD83D\uDCC1 ${item.folder.name} ]")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "[ 📁 ${item.folder.name} ]")
                     .build()
                 mediaSession?.setMetadata(metadata)
             }
             is BandDisplayItem.AutomationItem -> {
                 val stateText = if (item.automation.type.equals("COUNTER", ignoreCase = true)) {
-                    "[ 🔢 COUNT: $clickCounter ]"
+                    "[ COUNT: $clickCounter ]"
                 } else if (item.automation.type.equals("ALARM", ignoreCase = true)) {
                     "[ ⏰ ${item.automation.webhookUrlOn} ]"
+                } else if (item.automation.type.equals("FUEL", ignoreCase = true)) {
+                    val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+                    val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+                    val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+                    val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
+                    val rangeKm = (liters * avg).toInt()
+                    val statusPrefix = if (isFuelTracking) "ON" else "OFF"
+                    String.format(Locale.US, "[ %s: %.1fL | %dkm ]", statusPrefix, liters, rangeKm)
                 } else if (item.automation.isToggle) {
-                    if (item.automation.currentState) "[ 🟢 ON ]" else "[ 🔴 OFF ]"
+                    if (item.automation.currentState) "[ ON ]" else "[ OFF ]"
                 } else {
-                    "[ ⚡ TRIGGER ]"
+                    "[ TRIGGER ]"
                 }
 
-                val titleWithState = "${item.automation.name}  $stateText"
-
+                val titleWithState = "${item.automation.name} $stateText"
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, "Band Trigger")
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, titleWithState)
@@ -390,7 +537,6 @@ class MediaService : Service() {
 
     private fun triggerCurrentWebhook(automation: Automation, isTurnOn: Boolean) {
         val commandToExecute = if (isTurnOn) automation.webhookUrlOn else automation.webhookUrlOff
-
         if (commandToExecute.isNotEmpty()) {
             if (automation.type.equals("CAMERA", ignoreCase = true)) {
                 val intent = Intent(this, HiddenCameraActivity::class.java).apply {
@@ -455,12 +601,14 @@ class MediaService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopAlarmLoop()
+        stopFuelGpsTracking()
         if (::audioManager.isInitialized) audioManager.abandonAudioFocus { }
         audioRecorder.stopRecording()
         mediaSession?.release()
-
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancel(COUNTER_NOTIFICATION_ID)
+        notificationManager.cancel(FUEL_NOTIFICATION_ID)
     }
 
     private fun saveAutomationsToMemory() {
@@ -476,6 +624,7 @@ class MediaService : Service() {
                 put("isToggle", auto.isToggle)
                 put("currentState", auto.currentState)
                 put("folderId", auto.folderId)
+                put("alarmDays", auto.alarmDays)
             })
         }
         sharedPrefs.edit().putString("AUTOMATIONS_LIST", jsonArray.toString()).apply()
@@ -485,15 +634,9 @@ class MediaService : Service() {
         Thread {
             try {
                 val hex = macStr.split(":", "-")
-                if (hex.size != 6) {
-                    Log.e("BandTrigger", "MAC Address inválido")
-                    return@Thread
-                }
+                if (hex.size != 6) return@Thread
                 val macBytes = ByteArray(6)
-                for (i in 0..5) {
-                    macBytes[i] = Integer.parseInt(hex[i], 16).toByte()
-                }
-
+                for (i in 0..5) macBytes[i] = Integer.parseInt(hex[i], 16).toByte()
                 val bytes = ByteArray(6 + 16 * macBytes.size)
                 for (i in 0..5) bytes[i] = 0xff.toByte()
                 var i = 6
@@ -501,70 +644,103 @@ class MediaService : Service() {
                     System.arraycopy(macBytes, 0, bytes, i, macBytes.size)
                     i += macBytes.size
                 }
-
                 val address = java.net.InetAddress.getByName("255.255.255.255")
                 val packet = java.net.DatagramPacket(bytes, bytes.size, address, 9)
                 val socket = java.net.DatagramSocket()
                 socket.broadcast = true
                 socket.send(packet)
                 socket.close()
-                Log.d("BandTrigger", "Magic Packet enviado para $macStr")
             } catch (e: Exception) {
                 Log.e("BandTrigger", "Erro ao enviar Wake on LAN", e)
             }
         }.start()
     }
 
+    private fun getVibrator(): Vibrator {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+    }
+
+    private fun stopAlarmLoop() {
+        isAlarmRinging = false
+        alarmRunnable?.let { alarmHandler.removeCallbacks(it) }
+        try {
+            getVibrator().cancel()
+        } catch (e: Exception) { }
+        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notifManager.cancel(ALARM_NOTIFICATION_ID)
+        updatePlaybackState(PlaybackState.STATE_PAUSED)
+        updateWatchDisplay()
+    }
+
     private fun startAlarmLoop(alarmName: String) {
         isAlarmRinging = true
-
-        // 1. Dispara a notificação de ALTA PRIORIDADE para o celular e relógio VIBRAREM
         val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val vibPattern = longArrayOf(0, 500, 200, 500, 200, 500)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
                 ALARM_CHANNEL_ID,
-                "Alarmes",
+                "Band Trigger Alarms",
                 android.app.NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500) // Vibração agressiva
+                vibrationPattern = vibPattern
             }
             notifManager.createNotificationChannel(channel)
         }
 
         val builder = androidx.core.app.NotificationCompat.Builder(this, ALARM_CHANNEL_ID)
             .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
-            .setContentTitle("🚨 $alarmName")
+            .setContentTitle("⏰ $alarmName")
             .setContentText("Press Play/Pause on the watch to disarm!")
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX) // MÁXIMA
-            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL) // FORÇA O CELULAR A APITAR E VIBRAR ALTO
-            .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_ALARM)
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+            .setVibrate(vibPattern)
+            .setOnlyAlertOnce(false)
             .setAutoCancel(true)
 
-        notifManager.notify(ALARM_NOTIFICATION_ID, builder.build())
-
-        // 2. O Sequestro de Tela (Pisca a tela do relógio a cada 2.5s)
         alarmRunnable = object : Runnable {
             var toggle = false
+            var tickCount = 0
             override fun run() {
                 if (!isAlarmRinging) return
 
+                // Vibra o celular diretamente via hardware
+                try {
+                    val vibrator = getVibrator()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator.vibrate(VibrationEffect.createWaveform(vibPattern, -1))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(vibPattern, -1)
+                    }
+                } catch (e: Exception) {
+                    Log.e("BandTrigger", "Erro ao vibrar hardware", e)
+                }
+
+                // A cada 2 ciclos (5s), reenvia a notificação para a Galaxy Fit 3 vibrar novamente
+                if (tickCount % 2 == 0) {
+                    notifManager.notify(ALARM_NOTIFICATION_ID, builder.build())
+                }
+                tickCount++
+
                 val metadata = MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, "🚨 $alarmName 🚨")
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "⏰ $alarmName")
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, if (toggle) "[- PRESS PLAY -]" else "[- TO STOP -]")
                     .build()
                 mediaSession?.setMetadata(metadata)
-
                 updatePlaybackState(if (toggle) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED)
                 toggle = !toggle
-
-                // Repete a cada 2.5 segundos
                 alarmHandler.postDelayed(this, 2500)
             }
         }
-
-        // Inicia o loop imediatamente
         alarmHandler.post(alarmRunnable!!)
     }
 
@@ -581,33 +757,22 @@ class MediaService : Service() {
         }
 
         val selectedDays = auto.alarmDays.split(",").mapNotNull { it.toIntOrNull() }
-
         if (selectedDays.isEmpty()) {
-            // Alarme único (não repete)
             if (calendar.before(java.util.Calendar.getInstance())) {
                 calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
             }
         } else {
-            // Alarme recorrente: encontrar o próximo dia válido
             val currentDayOfWeek = calendar.get(java.util.Calendar.DAY_OF_WEEK)
             var daysToAdd = 0
-
-            // Verifica os próximos 7 dias
             for (i in 0..7) {
                 val checkDay = (currentDayOfWeek + i - 1) % 7 + 1
                 if (selectedDays.contains(checkDay)) {
-                    if (i == 0 && calendar.before(java.util.Calendar.getInstance())) {
-                        // É hoje, mas o horário já passou, então checa a próxima ocorrência
-                        continue
-                    }
+                    if (i == 0 && calendar.before(java.util.Calendar.getInstance())) continue
                     daysToAdd = i
                     break
                 }
             }
-            // Se passou pelo loop e daysToAdd é 0, mas o horário já passou, repete na mesma semana
-            if (daysToAdd == 0 && calendar.before(java.util.Calendar.getInstance())) {
-                daysToAdd = 7
-            }
+            if (daysToAdd == 0 && calendar.before(java.util.Calendar.getInstance())) daysToAdd = 7
             calendar.add(java.util.Calendar.DAY_OF_YEAR, daysToAdd)
         }
 
@@ -629,9 +794,11 @@ class MediaService : Service() {
             } else {
                 alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
             }
-            Log.d("BandTrigger", "Alarme ${auto.name} agendado para: ${calendar.time}")
         } catch (e: SecurityException) {
-            Log.e("BandTrigger", "Sem permissão de alarme exato", e)
+            // Fallback seguro caso o sistema restrinja o alarme exato
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            }
         }
     }
 }

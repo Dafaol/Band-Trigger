@@ -317,11 +317,18 @@ class AutomationsFragment : Fragment() {
     }
 
     private fun showAutomationDetails(automation: Automation) {
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val msg = if (automation.type.equals("COUNTER", ignoreCase = true)) {
             "This is a Counter automation.\nYou can reset the current count to zero below."
         } else if (automation.type.equals("ALARM", ignoreCase = true)) {
             val repeatStr = if (automation.alarmDays.isNotEmpty()) "\nRepeat days: ${getDaysString(automation.alarmDays)}" else "\nRepeat: Never"
             "Smartband Alarm.\nTime: ${automation.webhookUrlOn}" + repeatStr
+        } else if (automation.type.equals("FUEL", ignoreCase = true)) {
+            val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+            val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+            val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
+            val range = (liters * avg).toInt()
+            String.format(java.util.Locale.US, "GPS Fuel Tracker.\nRemaining: %.2f L (~%d km)\n\nManage tank & calibration in the About tab (7 clicks).", liters, range)
         } else {
             "Turn ON:\n${automation.webhookUrlOn}\n\nTurn OFF:\n${automation.webhookUrlOff.ifEmpty { "N/A" }}"
         }
@@ -443,8 +450,16 @@ class AutomationsFragment : Fragment() {
         }
 
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
-        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)", "Counter", "Alarm (Smartband)")
-        val enabledFlags = booleanArrayOf(true, sharedPrefs.getBoolean("CAMERA_ENABLED", false), sharedPrefs.getBoolean("AUDIO_ENABLED", false), true, true, true)
+        val actionOptions = arrayOf("HTTP Webhook", "Hidden Camera", "Audio Recorder", "Wake on LAN (PC)", "Counter", "Alarm (Smartband)", "Fuel Tracker (GPS)")
+        val enabledFlags = booleanArrayOf(
+            true,
+            sharedPrefs.getBoolean("CAMERA_ENABLED", false),
+            sharedPrefs.getBoolean("AUDIO_ENABLED", false),
+            true,
+            true,
+            true,
+            sharedPrefs.getBoolean("FUEL_UNLOCKED", false)
+        )
 
         dropdownAction.setAdapter(object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, actionOptions) {
             override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
@@ -455,13 +470,13 @@ class AutomationsFragment : Fragment() {
             }
         })
 
-        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "WOL" to 3, "PC_MEDIA" to 0, "COUNTER" to 4, "ALARM" to 5)
+        val typeMap = mapOf("WEBHOOK" to 0, "CAMERA" to 1, "AUDIO" to 2, "WOL" to 3, "PC_MEDIA" to 0, "COUNTER" to 4, "ALARM" to 5, "FUEL" to 6)
         val typeIndex = if (existingAutomation != null) typeMap[existingAutomation.type] ?: 0 else 0
         dropdownAction.setText(actionOptions[typeIndex], false)
 
         fun updateLayoutVisibility(pos: Int) {
             layoutAlarmConfig.visibility = if (pos == 5) View.VISIBLE else View.GONE
-            layoutUrls.visibility = if (pos == 1 || pos == 2 || pos == 4 || pos == 5) View.GONE else View.VISIBLE
+            layoutUrls.visibility = if (pos == 1 || pos == 2 || pos == 4 || pos == 5 || pos == 6) View.GONE else View.VISIBLE
             if (pos == 3) {
                 editUrlOn.hint = "PC MAC Address (e.g. 1A:2B:3C:4D:5E:6F)"
                 editUrlOff.visibility = View.GONE
@@ -509,6 +524,12 @@ class AutomationsFragment : Fragment() {
                 val selectedDaysList = mutableListOf<Int>()
                 for (i in selectedDays.indices) { if (selectedDays[i]) selectedDaysList.add(i + 1) }
                 savedAlarmDays = selectedDaysList.joinToString(",")
+            }
+
+            else if (selectedAction == "Fuel Tracker (GPS)") {
+                autoType = "FUEL"
+                urlOn = "FUEL"
+                urlOff = "FUEL"
             }
 
             if (name.isNotEmpty() && urlOn.isNotEmpty()) {
