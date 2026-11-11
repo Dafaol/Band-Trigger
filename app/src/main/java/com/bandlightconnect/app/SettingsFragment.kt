@@ -58,6 +58,19 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         }
     }
 
+    private val requestKeepAlivePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val switchKeepAlive = requireView().findViewById<SwitchMaterial>(R.id.switchKeepAlive)
+        if (isGranted) {
+            sharedPrefs.edit().putBoolean("KEEP_ALIVE_ENABLED", true).apply()
+            notifyMediaServiceForegroundChange()
+        } else {
+            switchKeepAlive.isChecked = false
+            sharedPrefs.edit().putBoolean("KEEP_ALIVE_ENABLED", false).apply()
+            Toast.makeText(requireContext(), "Notification permission is required to keep service alive", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val requestCalendarPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val switchCalendar = requireView().findViewById<SwitchMaterial>(R.id.switchCalendarSync)
@@ -76,18 +89,20 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         val sharedPrefs = requireActivity().getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
 
         val switchHijackFocus = view.findViewById<SwitchMaterial>(R.id.switchHijackFocus)
+        val switchKeepAlive = view.findViewById<SwitchMaterial>(R.id.switchKeepAlive)
         val switchHiddenCamera = view.findViewById<SwitchMaterial>(R.id.switchHiddenCamera)
         val switchAudioRecorder = view.findViewById<SwitchMaterial>(R.id.switchAudioRecorder)
         val switchCounterNotif = view.findViewById<SwitchMaterial>(R.id.switchCounterNotification)
-
         val switchCalendarSync = view.findViewById<SwitchMaterial>(R.id.switchCalendarSync)
         val layoutSyncInterval = view.findViewById<View>(R.id.layoutSyncInterval)
         val textSyncInterval = view.findViewById<TextView>(R.id.textSyncInterval)
 
         switchHijackFocus.isChecked = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
+        switchKeepAlive.isChecked = sharedPrefs.getBoolean("KEEP_ALIVE_ENABLED", false)
         switchHiddenCamera.isChecked = sharedPrefs.getBoolean("CAMERA_ENABLED", false)
         switchAudioRecorder.isChecked = sharedPrefs.getBoolean("AUDIO_ENABLED", false)
         switchCounterNotif.isChecked = sharedPrefs.getBoolean("COUNTER_NOTIFICATION_ENABLED", false)
@@ -109,7 +124,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         }
         updateIntervalText(currentInterval)
 
-        // Comportamentos das chaves normais
         switchHijackFocus.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 if (isNotificationServiceEnabled()) {
@@ -126,6 +140,22 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 }
             } else {
                 sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
+            }
+        }
+
+        switchKeepAlive.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestKeepAlivePermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    sharedPrefs.edit().putBoolean("KEEP_ALIVE_ENABLED", true).apply()
+                    notifyMediaServiceForegroundChange()
+                }
+            } else {
+                sharedPrefs.edit().putBoolean("KEEP_ALIVE_ENABLED", false).apply()
+                notifyMediaServiceForegroundChange()
             }
         }
 
@@ -171,7 +201,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             }
         }
 
-        // Lógica do Calendário
         switchCalendarSync.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
@@ -219,14 +248,18 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         btnExitApp.setOnClickListener {
             val dialog = android.app.AlertDialog.Builder(requireContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Turn Off Band Trigger")
-                .setMessage("This will disable the 'Hijack Band Focus' feature and stop the background service.\n\nYou will need to turn it back on in Settings next time you use the app.\n\nExit anyway?")
+                .setMessage("This will disable 'Hijack Band Focus' and 'Keep Service Alive', stopping the background service.\n\nYou will need to turn them back on in Settings next time you use the app.\n\nExit anyway?")
                 .setPositiveButton("Turn Off") { _, _ ->
-                    sharedPrefs.edit().putBoolean("AUTO_FOCUS_ENABLED", false).apply()
+                    sharedPrefs.edit()
+                        .putBoolean("AUTO_FOCUS_ENABLED", false)
+                        .putBoolean("KEEP_ALIVE_ENABLED", false)
+                        .apply()
                     requireContext().stopService(Intent(requireContext(), MediaService::class.java))
                     requireActivity().finishAffinity()
                 }
                 .setNegativeButton("Cancel", null)
                 .create()
+
             dialog.setOnShowListener {
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(android.graphics.Color.parseColor("#FF5252"))
                 dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(android.graphics.Color.WHITE)
@@ -244,6 +277,13 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         }
     }
 
+    private fun notifyMediaServiceForegroundChange() {
+        val intent = Intent(requireContext(), MediaService::class.java).apply {
+            action = "ACTION_UPDATE_FOREGROUND"
+        }
+        requireContext().startService(intent)
+    }
+
     private fun isNotificationServiceEnabled(): Boolean {
         val packageName = requireContext().packageName
         val flat = Settings.Secure.getString(requireContext().contentResolver, "enabled_notification_listeners")
@@ -252,12 +292,9 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
 
     private fun startCalendarSyncWork(intervalMins: Long) {
         val workManager = WorkManager.getInstance(requireContext())
-
-        // Dispara uma vez na mesma hora para feedback
         val instantRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>().build()
         workManager.enqueue(instantRequest)
 
-        // Substitui a tarefa periódica com o novo tempo
         val periodicRequest = PeriodicWorkRequestBuilder<CalendarSyncWorker>(intervalMins, TimeUnit.MINUTES).build()
         workManager.enqueueUniquePeriodicWork(
             "CalendarSyncJob",

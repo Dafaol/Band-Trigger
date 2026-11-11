@@ -6,14 +6,14 @@ import android.content.Intent
 import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import android.os.Handler
-import android.os.Looper
 
 class FocusListenerService : NotificationListenerService() {
-
     private val handler = Handler(Looper.getMainLooper())
     private var hijackRunnable: Runnable? = null
 
@@ -29,40 +29,35 @@ class FocusListenerService : NotificationListenerService() {
 
     private fun checkIfMediaPaused(sbn: StatusBarNotification?) {
         if (sbn == null) return
-
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val isEnabled = sharedPrefs.getBoolean("AUTO_FOCUS_ENABLED", false)
-
         if (!isEnabled) return
-
         if (sbn.packageName == packageName) return
 
         val extras = sbn.notification.extras
         val token = extras.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
-
         if (token != null) {
             try {
                 val controller = MediaController(this, token)
                 val state = controller.playbackState?.state
-
                 if (state == PlaybackState.STATE_PLAYING) {
                     hijackRunnable?.let { handler.removeCallbacks(it) }
-                }
-                else if (state == PlaybackState.STATE_PAUSED) {
+                } else if (state == PlaybackState.STATE_PAUSED) {
                     hijackRunnable?.let { handler.removeCallbacks(it) }
-
                     hijackRunnable = Runnable {
                         val currentState = controller.playbackState?.state
                         if (currentState == PlaybackState.STATE_PAUSED) {
                             Log.d("BandTrigger", "Media paused by: ${sbn.packageName}. Reclaiming watch focus!")
-
-
                             val intent = Intent(this, MediaService::class.java).apply {
                                 action = "ACTION_HIJACK"
                             }
-
                             try {
-                                startService(intent)
+                                val keepAlive = sharedPrefs.getBoolean("KEEP_ALIVE_ENABLED", false)
+                                if (keepAlive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    startForegroundService(intent)
+                                } else {
+                                    startService(intent)
+                                }
                             } catch (e: Exception) {
                                 Log.e("BandTrigger", "Error starting MediaService", e)
                             }

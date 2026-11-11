@@ -1,10 +1,12 @@
 package com.bandlightconnect.app
 
 import android.Manifest
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -16,6 +18,7 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -27,6 +30,10 @@ import java.util.Locale
 import java.util.UUID
 
 class MediaService : Service() {
+    // Variáveis do Keep Service Alive (Foreground Service)
+    private val KEEP_ALIVE_NOTIFICATION_ID = 4004
+    private val KEEP_ALIVE_CHANNEL_ID = "KeepAliveChannelV1"
+
     // Variáveis do Alarme
     private var isAlarmRinging = false
     private val alarmHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -76,7 +83,6 @@ class MediaService : Service() {
                         .putFloat("FUEL_TRIP_KM", newTripKm)
                         .putFloat("FUEL_ODOMETER", newOdo)
 
-                    // Dispara o alarme na pulseira automaticamente ao atingir a reserva
                     if (newLiters <= reserve && !alreadyAlerted) {
                         editor.putBoolean("FUEL_RESERVE_ALERTED", true)
                         startAlarmLoop(String.format(Locale.US, "⛽ Reserve (%.1fL)", newLiters))
@@ -119,6 +125,8 @@ class MediaService : Service() {
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         mediaSession = MediaSession(this, "BandTriggerSession")
 
+        applyForegroundState()
+
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         isFuelTracking = sharedPrefs.getBoolean("FUEL_TRACKING_ACTIVE", false)
         if (isFuelTracking) {
@@ -157,6 +165,12 @@ class MediaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        applyForegroundState()
+
+        if (intent?.action == "ACTION_UPDATE_FOREGROUND") {
+            return START_STICKY
+        }
+
         if (intent?.action == "ACTION_FIRE_ALARM") {
             val alarmName = intent.getStringExtra("ALARM_NAME") ?: "Lembrete"
             startAlarmLoop(alarmName)
@@ -198,6 +212,70 @@ class MediaService : Service() {
         }
 
         return START_STICKY
+    }
+
+    private fun applyForegroundState() {
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        val keepAlive = sharedPrefs.getBoolean("KEEP_ALIVE_ENABLED", false)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        if (keepAlive) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = android.app.NotificationChannel(
+                    KEEP_ALIVE_CHANNEL_ID,
+                    "Band Trigger Active Service",
+                    android.app.NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Keeps Band Trigger active in background for instant webhook and watch response"
+                    setShowBadge(false)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val openAppIntent = Intent(this, MainActivity::class.java)
+            val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, pendingFlags)
+
+            val notification = androidx.core.app.NotificationCompat.Builder(this, KEEP_ALIVE_CHANNEL_ID)
+                .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
+                .setContentTitle("Band Trigger is active")
+                .setContentText("Listening for smartband media controls")
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+                .build()
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        KEEP_ALIVE_NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    )
+                } else {
+                    startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification)
+                }
+            } catch (e: Exception) {
+                Log.e("BandTrigger", "Error starting foreground service", e)
+            }
+        } else {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                notificationManager.cancel(KEEP_ALIVE_NOTIFICATION_ID)
+            } catch (e: Exception) {
+                Log.e("BandTrigger", "Error stopping foreground service", e)
+            }
+        }
     }
 
     private fun toggleFuelTripState() {
@@ -274,11 +352,11 @@ class MediaService : Service() {
             action = "ACTION_TOGGLE_FUEL_TRIP"
         }
         val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val stopPendingIntent = android.app.PendingIntent.getService(this, 2, stopIntent, pendingFlags)
+        val stopPendingIntent = PendingIntent.getService(this, 2, stopIntent, pendingFlags)
 
         val builder = androidx.core.app.NotificationCompat.Builder(this, FUEL_CHANNEL_ID)
             .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
@@ -322,11 +400,11 @@ class MediaService : Service() {
                 action = "ACTION_RESET_COUNTER"
             }
             val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                PendingIntent.FLAG_UPDATE_CURRENT
             }
-            val resetPendingIntent = android.app.PendingIntent.getService(this, 1, resetIntent, pendingFlags)
+            val resetPendingIntent = PendingIntent.getService(this, 1, resetIntent, pendingFlags)
             builder.addAction(android.R.drawable.ic_menu_revert, "Reset", resetPendingIntent)
         }
 
@@ -563,14 +641,28 @@ class MediaService : Service() {
                 }
             }
             else if (automation.type.equals("WEBHOOK", ignoreCase = true) || automation.type.equals("PC_MEDIA", ignoreCase = true)) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BandTrigger::WebhookWakeLock")
+                wakeLock.acquire(5000L)
+
                 Thread {
                     try {
                         val connection = java.net.URL(commandToExecute).openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "GET"
-                        connection.responseCode
+                        connection.connectTimeout = 5000
+                        connection.readTimeout = 5000
+                        connection.setRequestProperty("User-Agent", "BandTrigger-Android")
+                        val code = connection.responseCode
+                        Log.d("BandTrigger", "Webhook disparado com código HTTP: $code")
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e("BandTrigger", "Error triggering webhook", e)
+                    } finally {
+                        if (wakeLock.isHeld) {
+                            try {
+                                wakeLock.release()
+                            } catch (e: Exception) { }
+                        }
                     }
                 }.start()
             }
@@ -609,6 +701,7 @@ class MediaService : Service() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancel(COUNTER_NOTIFICATION_ID)
         notificationManager.cancel(FUEL_NOTIFICATION_ID)
+        notificationManager.cancel(KEEP_ALIVE_NOTIFICATION_ID)
     }
 
     private fun saveAutomationsToMemory() {
@@ -631,6 +724,10 @@ class MediaService : Service() {
     }
 
     private fun sendWakeOnLan(macStr: String) {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BandTrigger::WolWakeLock")
+        wakeLock.acquire(5000L)
+
         Thread {
             try {
                 val hex = macStr.split(":", "-")
@@ -652,6 +749,12 @@ class MediaService : Service() {
                 socket.close()
             } catch (e: Exception) {
                 Log.e("BandTrigger", "Erro ao enviar Wake on LAN", e)
+            } finally {
+                if (wakeLock.isHeld) {
+                    try {
+                        wakeLock.release()
+                    } catch (e: Exception) { }
+                }
             }
         }.start()
     }
@@ -712,7 +815,6 @@ class MediaService : Service() {
             override fun run() {
                 if (!isAlarmRinging) return
 
-                // Vibra o celular diretamente via hardware
                 try {
                     val vibrator = getVibrator()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -725,7 +827,6 @@ class MediaService : Service() {
                     Log.e("BandTrigger", "Erro ao vibrar hardware", e)
                 }
 
-                // A cada 2 ciclos (5s), reenvia a notificação para a Galaxy Fit 3 vibrar novamente
                 if (tickCount % 2 == 0) {
                     notifManager.notify(ALARM_NOTIFICATION_ID, builder.build())
                 }
@@ -782,11 +883,11 @@ class MediaService : Service() {
             putExtra("ALARM_ID", auto.id)
         }
         val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = android.app.PendingIntent.getBroadcast(this, auto.id.hashCode(), intent, pendingFlags)
+        val pendingIntent = PendingIntent.getBroadcast(this, auto.id.hashCode(), intent, pendingFlags)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -795,7 +896,6 @@ class MediaService : Service() {
                 alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
             }
         } catch (e: SecurityException) {
-            // Fallback seguro caso o sistema restrinja o alarme exato
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarmManager.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
             }

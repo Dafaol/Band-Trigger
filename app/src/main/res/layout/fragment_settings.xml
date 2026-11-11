@@ -31,6 +31,26 @@
             android:textColor="#AAAAAA"
             android:textSize="14sp" />
 
+        <!-- NOVO: Keep Service Alive (Foreground Service para Android 14-17) -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchKeepAlive"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Keep Service Alive (Foreground)"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:thumbTint="@color/bottom_nav_colors" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Displays a silent persistent notification to prevent Android 14–17 from freezing background webhooks and watch controls when the screen is locked."
+            android:textColor="#AAAAAA"
+            android:textSize="14sp" />
+
         <!-- Line/Separator -->
         <View
             android:layout_width="match_parent"
