@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -40,13 +41,26 @@ class AboutFragment : Fragment() {
     private var lastSecretClickTime = 0L
     private val uiHandler = Handler(Looper.getMainLooper())
 
+    private val requestBackgroundLocationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        showFuelTrackerDialog()
+    }
+
     private val requestLocationPermission = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            showFuelTrackerDialog()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Toast.makeText(requireContext(), "Select 'Allow all the time' so GPS works with the screen locked!", Toast.LENGTH_LONG).show()
+                requestBackgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            } else {
+                showFuelTrackerDialog()
+            }
         } else {
             Toast.makeText(requireContext(), "GPS permission is required for Fuel Tracker", Toast.LENGTH_LONG).show()
         }
@@ -76,7 +90,6 @@ class AboutFragment : Fragment() {
             openFuelTrackerWithPermissionCheck()
         }
 
-        // Easter Egg Android-Like: 7 cliques em "Developed by Dafaol Creations"
         view.findViewById<View>(R.id.cardCreatorBadge).setOnClickListener {
             val isAlreadyUnlocked = sharedPrefs.getBoolean("FUEL_UNLOCKED", false)
             if (isAlreadyUnlocked) {
@@ -129,13 +142,23 @@ class AboutFragment : Fragment() {
     }
 
     private fun openFuelTrackerWithPermissionCheck() {
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            showFuelTrackerDialog()
-        } else {
+        val hasFine = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasFine) {
             requestLocationPermission.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
+            return
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(requireContext(), "Select 'Allow all the time' so GPS works with the screen locked!", Toast.LENGTH_LONG).show()
+            requestBackgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            return
+        }
+
+        showFuelTrackerDialog()
     }
 
     private fun ensureFuelAutomationExists(sharedPrefs: SharedPreferences) {
@@ -353,7 +376,6 @@ class AboutFragment : Fragment() {
             view?.postDelayed({ refreshDialogUi() }, 150)
         }
 
-        // Botão Full Tank: 2 Cliques + Odômetro na Bomba + Litros Abastecidos (Opcional) com Cálculo de Média Real
         btnFullTank.setOnClickListener {
             if (!isFullTankArmed) {
                 isFullTankArmed = true
@@ -516,7 +538,6 @@ class AboutFragment : Fragment() {
             confirmDialog.show()
         }
 
-        // Botão Hit Reserve: 2 Cliques + Janela de Confirmação
         btnHitReserve.setOnClickListener {
             if (!isReserveArmed) {
                 isReserveArmed = true
@@ -551,7 +572,6 @@ class AboutFragment : Fragment() {
             confirmDialog.show()
         }
 
-        // Botão Undo: Restaura os valores anteriores
         btnUndoFuel.setOnClickListener {
             restoreFuelSnapshot(sharedPrefs)
             requireContext().startService(Intent(requireContext(), MediaService::class.java).apply { action = "ACTION_REFRESH_FUEL" })
@@ -561,7 +581,6 @@ class AboutFragment : Fragment() {
 
         dialog.findViewById<View>(R.id.btnCloseFuel).setOnClickListener { dialog.dismiss() }
 
-        // Botão Save Config: Bloqueio de Odômetro Menor + 2 Cliques + Janela de Confirmação
         btnSaveFuel.setOnClickListener {
             val newCap = editCapacity.text.toString().replace(",", ".").toFloatOrNull() ?: 14.0f
             val newRes = editReserve.text.toString().replace(",", ".").toFloatOrNull() ?: 2.0f

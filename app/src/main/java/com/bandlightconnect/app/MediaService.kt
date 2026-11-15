@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
@@ -23,6 +24,8 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import android.view.KeyEvent
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
@@ -51,13 +54,17 @@ class MediaService : Service() {
     private var locationManager: LocationManager? = null
     private var lastLocation: Location? = null
     private var isFuelTracking = false
+    private var gpsWakeLock: PowerManager.WakeLock? = null
     private val FUEL_NOTIFICATION_ID = 3003
+    private val FUEL_STATUS_ALERT_ID = 3004
     private val FUEL_CHANNEL_ID = "FuelTrackerChannelV1"
+    private val FUEL_ALERT_CHANNEL_ID = "FuelTrackerAlertChannelV1"
 
     private val fuelLocationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (!isFuelTracking) return
-            if (location.hasAccuracy() && location.accuracy > 35f) return
+            // Tolerância de 50m para funcionar bem com o celular no bolso da jaqueta/calça
+            if (location.hasAccuracy() && location.accuracy > 50f) return
 
             val prev = lastLocation
             if (prev != null) {
@@ -123,12 +130,18 @@ class MediaService : Service() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        mediaSession = MediaSession(this, "BandTriggerSession")
-
-        applyForegroundState()
+        mediaSession = MediaSession(this, "BandTriggerSession").apply {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            setPlaybackToLocal(attrs)
+        }
 
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         isFuelTracking = sharedPrefs.getBoolean("FUEL_TRACKING_ACTIVE", false)
+        applyForegroundState()
+
         if (isFuelTracking) {
             startFuelGpsTracking()
             updateFuelNotification()
@@ -157,6 +170,34 @@ class MediaService : Service() {
                     updateWatchDisplay()
                     syncPlaybackStateForCurrentItem()
                 }
+            }
+            override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                val event = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                }
+                if (event != null && event.action == KeyEvent.ACTION_DOWN) {
+                    when (event.keyCode) {
+                        KeyEvent.KEYCODE_MEDIA_PLAY,
+                        KeyEvent.KEYCODE_MEDIA_PAUSE,
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_HEADSETHOOK -> {
+                            handlePlayPause()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                            onSkipToNext()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                            onSkipToPrevious()
+                            return true
+                        }
+                    }
+                }
+                return super.onMediaButtonEvent(mediaButtonIntent)
             }
         })
 
@@ -196,6 +237,16 @@ class MediaService : Service() {
             return START_STICKY
         }
 
+        if (intent?.action == "ACTION_TEST_WEBHOOK") {
+            val autoId = intent.getStringExtra("AUTO_ID")
+            loadAutomationsFromMemory()
+            val target = automationList.find { it.id == autoId }
+            if (target != null) {
+                triggerCurrentWebhook(target, isTurnOn = true)
+            }
+            return START_STICKY
+        }
+
         loadAutomationsFromMemory()
         rebuildDisplayList()
 
@@ -217,16 +268,18 @@ class MediaService : Service() {
     private fun applyForegroundState() {
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
         val keepAlive = sharedPrefs.getBoolean("KEEP_ALIVE_ENABLED", false)
+        val trackingActive = sharedPrefs.getBoolean("FUEL_TRACKING_ACTIVE", false)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
 
-        if (keepAlive) {
+        // Sobe para Foreground se Keep Alive estiver ligado OU se o GPS do Fuel Tracker estiver rodando
+        if (keepAlive || trackingActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = android.app.NotificationChannel(
                     KEEP_ALIVE_CHANNEL_ID,
                     "Band Trigger Active Service",
                     android.app.NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "Keeps Band Trigger active in background for instant webhook and watch response"
+                    description = "Keeps Band Trigger active in background for instant webhook and GPS response"
                     setShowBadge(false)
                 }
                 notificationManager.createNotificationChannel(channel)
@@ -243,7 +296,7 @@ class MediaService : Service() {
             val notification = androidx.core.app.NotificationCompat.Builder(this, KEEP_ALIVE_CHANNEL_ID)
                 .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
                 .setContentTitle("Band Trigger is active")
-                .setContentText("Listening for smartband media controls")
+                .setContentText(if (trackingActive) "GPS Fuel Tracker running in background" else "Listening for smartband media controls")
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
@@ -252,11 +305,13 @@ class MediaService : Service() {
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(
-                        KEEP_ALIVE_NOTIFICATION_ID,
-                        notification,
+                    val hasLocPerm = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    val fgType = if (trackingActive && hasLocPerm) {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    } else {
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                    )
+                    }
+                    startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification, fgType)
                 } else {
                     startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification)
                 }
@@ -279,29 +334,96 @@ class MediaService : Service() {
     }
 
     private fun toggleFuelTripState() {
-        isFuelTracking = !isFuelTracking
         val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        isFuelTracking = !isFuelTracking
         sharedPrefs.edit().putBoolean("FUEL_TRACKING_ACTIVE", isFuelTracking).apply()
 
         automationList.filter { it.type.equals("FUEL", ignoreCase = true) }.forEach {
             it.currentState = isFuelTracking
         }
         saveAutomationsToMemory()
+        applyForegroundState()
+
+        val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+        val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+        val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
+        val tripNow = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+        val odoNow = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+        val rangeKm = (liters * avg).toInt()
 
         if (isFuelTracking) {
+            sharedPrefs.edit().putFloat("FUEL_TRIP_AT_START", tripNow).apply()
             startFuelGpsTracking()
             updatePlaybackState(PlaybackState.STATE_PLAYING)
+            vibrateFeedbackPulse(isStopping = false)
+            sendFuelTripFeedbackNotification(
+                title = "⛽ GPS Tracking Started",
+                message = String.format(Locale.US, "Tank: %.2f L (~%d km) | Odo: %.1f km", liters, rangeKm, odoNow)
+            )
         } else {
             stopFuelGpsTracking()
             updatePlaybackState(PlaybackState.STATE_PAUSED)
+            vibrateFeedbackPulse(isStopping = true)
+
+            val tripStart = sharedPrefs.getFloat("FUEL_TRIP_AT_START", tripNow)
+            val sessionKm = (tripNow - tripStart).coerceAtLeast(0.0f)
+            sendFuelTripFeedbackNotification(
+                title = String.format(Locale.US, "🏁 Trip Finished (+%.2f km)", sessionKm),
+                message = String.format(Locale.US, "Remaining: %.2f L (~%d km) | Odo: %.1f km", liters, rangeKm, odoNow)
+            )
         }
         updateFuelNotification()
         updateWatchDisplay()
     }
 
+    private fun vibrateFeedbackPulse(isStopping: Boolean) {
+        try {
+            val vibrator = getVibrator()
+            val pattern = if (isStopping) longArrayOf(0, 200, 120, 250) else longArrayOf(0, 180)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(pattern, -1)
+            }
+        } catch (e: Exception) {
+            Log.e("BandTrigger", "Erro ao vibrar feedback do Fuel Tracker", e)
+        }
+    }
+
+    private fun sendFuelTripFeedbackNotification(title: String, message: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                FUEL_ALERT_CHANNEL_ID,
+                "Band Trigger Fuel Trip Alerts",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, FUEL_ALERT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        notificationManager.notify(FUEL_STATUS_ALERT_ID, builder.build())
+    }
+
     private fun startFuelGpsTracking() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             try {
+                if (gpsWakeLock?.isHeld != true) {
+                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    gpsWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BandTrigger::FuelGpsWakeLock").apply {
+                        setReferenceCounted(false)
+                        acquire(4 * 60 * 60 * 1000L) // Até 4h de viagem contínua com a tela bloqueada
+                    }
+                }
                 lastLocation = null
                 locationManager?.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
@@ -319,6 +441,9 @@ class MediaService : Service() {
         try {
             locationManager?.removeUpdates(fuelLocationListener)
             lastLocation = null
+            if (gpsWakeLock?.isHeld == true) {
+                gpsWakeLock?.release()
+            }
         } catch (e: Exception) {
             Log.e("BandTrigger", "Erro ao parar GPS do Fuel Tracker", e)
         }
@@ -413,7 +538,12 @@ class MediaService : Service() {
 
     private fun requestAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
             val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
                 .setOnAudioFocusChangeListener { }
                 .build()
             audioManager.requestAudioFocus(focusRequest)
@@ -444,8 +574,8 @@ class MediaService : Service() {
                     id = obj.optString("id", UUID.randomUUID().toString()),
                     name = obj.getString("name"),
                     type = type,
-                    webhookUrlOn = obj.optString("webhookUrlOn", ""),
-                    webhookUrlOff = obj.optString("webhookUrlOff", ""),
+                    webhookUrlOn = obj.optString("webhookUrlOn", "").trim(),
+                    webhookUrlOff = obj.optString("webhookUrlOff", "").trim(),
                     isToggle = obj.optBoolean("isToggle", false),
                     currentState = if (type == "FUEL") isFuelTracking else obj.optBoolean("currentState", false),
                     folderId = if (obj.has("folderId") && !obj.isNull("folderId")) obj.getString("folderId") else null,
@@ -524,9 +654,6 @@ class MediaService : Service() {
                     return
                 }
 
-                currentAutomation.currentState = !currentAutomation.currentState
-                saveAutomationsToMemory()
-
                 if (currentAutomation.type.equals("COUNTER", ignoreCase = true)) {
                     clickCounter++
                     lastCounterName = currentAutomation.name
@@ -534,7 +661,16 @@ class MediaService : Service() {
                     updateWatchDisplay()
                 } else if (currentAutomation.type.equals("ALARM", ignoreCase = true)) {
                     startAlarmLoop(currentAutomation.name)
+                } else if (!currentAutomation.isToggle) {
+                    // Correção crítica: Automações de gatilho único (sem URL Off, ex: portão) SEMPRE disparam Turn ON
+                    currentAutomation.currentState = true
+                    saveAutomationsToMemory()
+                    updatePlaybackState(PlaybackState.STATE_PLAYING)
+                    triggerCurrentWebhook(currentAutomation, isTurnOn = true)
+                    updateWatchDisplay()
                 } else {
+                    currentAutomation.currentState = !currentAutomation.currentState
+                    saveAutomationsToMemory()
                     if (currentAutomation.currentState) {
                         updatePlaybackState(PlaybackState.STATE_PLAYING)
                         triggerCurrentWebhook(currentAutomation, isTurnOn = true)
@@ -614,8 +750,8 @@ class MediaService : Service() {
     }
 
     private fun triggerCurrentWebhook(automation: Automation, isTurnOn: Boolean) {
-        val commandToExecute = if (isTurnOn) automation.webhookUrlOn else automation.webhookUrlOff
-        if (commandToExecute.isNotEmpty()) {
+        val rawCommand = (if (isTurnOn) automation.webhookUrlOn else automation.webhookUrlOff).trim()
+        if (rawCommand.isNotEmpty()) {
             if (automation.type.equals("CAMERA", ignoreCase = true)) {
                 val intent = Intent(this, HiddenCameraActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
@@ -628,7 +764,7 @@ class MediaService : Service() {
                 }, 500)
             }
             else if (automation.type.equals("WOL", ignoreCase = true)) {
-                sendWakeOnLan(commandToExecute)
+                sendWakeOnLan(rawCommand)
             }
             else if (automation.type.equals("AUDIO", ignoreCase = true)) {
                 if (isTurnOn) {
@@ -645,9 +781,15 @@ class MediaService : Service() {
                 val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BandTrigger::WebhookWakeLock")
                 wakeLock.acquire(5000L)
 
+                val targetUrl = if (!rawCommand.startsWith("http://", ignoreCase = true) && !rawCommand.startsWith("https://", ignoreCase = true)) {
+                    "http://$rawCommand"
+                } else {
+                    rawCommand
+                }
+
                 Thread {
                     try {
-                        val connection = java.net.URL(commandToExecute).openConnection() as java.net.HttpURLConnection
+                        val connection = java.net.URL(targetUrl).openConnection() as java.net.HttpURLConnection
                         connection.requestMethod = "GET"
                         connection.connectTimeout = 5000
                         connection.readTimeout = 5000
@@ -657,6 +799,13 @@ class MediaService : Service() {
                         connection.disconnect()
                     } catch (e: Exception) {
                         Log.e("BandTrigger", "Error triggering webhook", e)
+                        alarmHandler.post {
+                            Toast.makeText(
+                                applicationContext,
+                                "Webhook Error (${automation.name}): ${e.javaClass.simpleName} - ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     } finally {
                         if (wakeLock.isHeld) {
                             try {
@@ -730,7 +879,7 @@ class MediaService : Service() {
 
         Thread {
             try {
-                val hex = macStr.split(":", "-")
+                val hex = macStr.trim().split(":", "-")
                 if (hex.size != 6) return@Thread
                 val macBytes = ByteArray(6)
                 for (i in 0..5) macBytes[i] = Integer.parseInt(hex[i], 16).toByte()

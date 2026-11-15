@@ -505,9 +505,9 @@ class AutomationsFragment : Fragment() {
         dialog.findViewById<View>(R.id.btnCancelAuto).setOnClickListener { dialog.dismiss() }
 
         dialog.findViewById<View>(R.id.btnSaveAuto).setOnClickListener {
-            val name = editName.text.toString()
-            var urlOn = editUrlOn.text.toString()
-            var urlOff = editUrlOff.text.toString()
+            val name = editName.text.toString().trim()
+            var urlOn = editUrlOn.text.toString().trim()
+            var urlOff = editUrlOff.text.toString().trim()
             var savedAlarmDays = ""
             val selectedAction = dropdownAction.text.toString()
             val folderId = foldersList.find { it.name == dropdownFolder.text.toString() }?.id
