@@ -63,32 +63,54 @@ class MediaService : Service() {
     private val fuelLocationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (!isFuelTracking) return
-            // Tolerância de 50m para funcionar bem com o celular no bolso da jaqueta/calça
             if (location.hasAccuracy() && location.accuracy > 50f) return
+
+            val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+            var currentPeakSpeed = sharedPrefs.getFloat("FUEL_SESSION_MAX_SPEED", 0.0f)
+
+            // Captura velocidade real do GPS em km/h
+            if (location.hasSpeed()) {
+                val speedKmh = location.speed * 3.6f
+                if (speedKmh in 0f..220f && speedKmh > currentPeakSpeed) {
+                    currentPeakSpeed = speedKmh
+                }
+            }
 
             val prev = lastLocation
             if (prev != null) {
                 val distanceMeters = location.distanceTo(prev)
                 if (distanceMeters >= 5f) {
+                    // Fallback de velocidade caso o provedor GPS não informe location.speed
+                    val deltaSec = (location.time - prev.time) / 1000f
+                    if (!location.hasSpeed() && deltaSec >= 1f) {
+                        val estSpeedKmh = (distanceMeters / deltaSec) * 3.6f
+                        if (estSpeedKmh in 0f..180f && estSpeedKmh > currentPeakSpeed) {
+                            currentPeakSpeed = estSpeedKmh
+                        }
+                    }
+
                     val distanceKm = distanceMeters / 1000f
-                    val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
                     val avgKmL = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f).coerceAtLeast(1.0f)
                     val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
                     val reserve = sharedPrefs.getFloat("FUEL_RESERVE", 2.0f)
                     val currentLiters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
                     val currentTripKm = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
                     val currentOdo = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+                    val currentSessionKm = sharedPrefs.getFloat("FUEL_SESSION_KM", 0.0f)
                     val alreadyAlerted = sharedPrefs.getBoolean("FUEL_RESERVE_ALERTED", false)
 
                     val litersUsed = distanceKm / avgKmL
                     val newLiters = (currentLiters - litersUsed).coerceAtLeast(0.0f)
                     val newTripKm = currentTripKm + distanceKm
                     val newOdo = if (currentOdo > 0f) currentOdo + distanceKm else distanceKm
+                    val newSessionKm = currentSessionKm + distanceKm
 
                     val editor = sharedPrefs.edit()
                         .putFloat("FUEL_CURRENT_LITERS", newLiters)
                         .putFloat("FUEL_TRIP_KM", newTripKm)
                         .putFloat("FUEL_ODOMETER", newOdo)
+                        .putFloat("FUEL_SESSION_KM", newSessionKm)
+                        .putFloat("FUEL_SESSION_MAX_SPEED", currentPeakSpeed)
 
                     if (newLiters <= reserve && !alreadyAlerted) {
                         editor.putBoolean("FUEL_RESERVE_ALERTED", true)
@@ -99,9 +121,14 @@ class MediaService : Service() {
                     lastLocation = location
                     updateWatchDisplay()
                     updateFuelNotification()
+                } else if (currentPeakSpeed > sharedPrefs.getFloat("FUEL_SESSION_MAX_SPEED", 0.0f)) {
+                    sharedPrefs.edit().putFloat("FUEL_SESSION_MAX_SPEED", currentPeakSpeed).apply()
                 }
             } else {
                 lastLocation = location
+                if (currentPeakSpeed > sharedPrefs.getFloat("FUEL_SESSION_MAX_SPEED", 0.0f)) {
+                    sharedPrefs.edit().putFloat("FUEL_SESSION_MAX_SPEED", currentPeakSpeed).apply()
+                }
             }
         }
         @Deprecated("Deprecated in Java")
@@ -231,6 +258,16 @@ class MediaService : Service() {
             return START_STICKY
         }
 
+        if (intent?.action == "ACTION_APPLY_PENDING_TRIP") {
+            applyPendingFilteredTrip()
+            return START_STICKY
+        }
+
+        if (intent?.action == "ACTION_UNDO_FUEL") {
+            undoLastFuelChangeFromNotification()
+            return START_STICKY
+        }
+
         if (intent?.action == "ACTION_REFRESH_FUEL") {
             updateWatchDisplay()
             if (isFuelTracking) updateFuelNotification()
@@ -271,7 +308,6 @@ class MediaService : Service() {
         val trackingActive = sharedPrefs.getBoolean("FUEL_TRACKING_ACTIVE", false)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
 
-        // Sobe para Foreground se Keep Alive estiver ligado OU se o GPS do Fuel Tracker estiver rodando
         if (keepAlive || trackingActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = android.app.NotificationChannel(
@@ -345,35 +381,257 @@ class MediaService : Service() {
         applyForegroundState()
 
         val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
-        val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
         val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
+        val litersNow = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
         val tripNow = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
         val odoNow = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
-        val rangeKm = (liters * avg).toInt()
+        val alertNow = sharedPrefs.getBoolean("FUEL_RESERVE_ALERTED", false)
+        val oilLastOdo = sharedPrefs.getFloat("FUEL_OIL_LAST_ODO", 0.0f)
 
         if (isFuelTracking) {
-            sharedPrefs.edit().putFloat("FUEL_TRIP_AT_START", tripNow).apply()
+            val nowMs = System.currentTimeMillis()
+            sharedPrefs.edit()
+                .putLong("SESSION_START_TIME", nowMs)
+                .putFloat("SESSION_START_LITERS", litersNow)
+                .putFloat("SESSION_START_TRIP", tripNow)
+                .putFloat("SESSION_START_ODO", odoNow)
+                .putBoolean("SESSION_START_ALERTED", alertNow)
+                .putFloat("FUEL_SESSION_KM", 0.0f)
+                .putFloat("FUEL_SESSION_MAX_SPEED", 0.0f)
+                .apply()
+
             startFuelGpsTracking()
             updatePlaybackState(PlaybackState.STATE_PLAYING)
             vibrateFeedbackPulse(isStopping = false)
+
+            val rangeKm = (litersNow * avg).toInt()
             sendFuelTripFeedbackNotification(
-                title = "⛽ GPS Tracking Started",
-                message = String.format(Locale.US, "Tank: %.2f L (~%d km) | Odo: %.1f km", liters, rangeKm, odoNow)
+                title = "⛽ GPS Tracking Started (${FuelStatsHelper.formatClockTime(nowMs)})",
+                message = String.format(Locale.US, "Tank: %.2f L (~%d km) | Odo: %.1f km", litersNow, rangeKm, odoNow),
+                actionLabel = null,
+                actionIntentName = null
             )
         } else {
             stopFuelGpsTracking()
             updatePlaybackState(PlaybackState.STATE_PAUSED)
             vibrateFeedbackPulse(isStopping = true)
 
-            val tripStart = sharedPrefs.getFloat("FUEL_TRIP_AT_START", tripNow)
-            val sessionKm = (tripNow - tripStart).coerceAtLeast(0.0f)
-            sendFuelTripFeedbackNotification(
-                title = String.format(Locale.US, "🏁 Trip Finished (+%.2f km)", sessionKm),
-                message = String.format(Locale.US, "Remaining: %.2f L (~%d km) | Odo: %.1f km", liters, rangeKm, odoNow)
-            )
+            val endTimeMs = System.currentTimeMillis()
+            val startTimeMs = sharedPrefs.getLong("SESSION_START_TIME", endTimeMs)
+            val durationMs = (endTimeMs - startTimeMs).coerceAtLeast(0L)
+            val durationStr = FuelStatsHelper.formatDuration(durationMs)
+            val endTimeStr = FuelStatsHelper.formatClockTime(endTimeMs)
+
+            val sessionKm = sharedPrefs.getFloat("FUEL_SESSION_KM", 0.0f)
+            val maxSpeed = sharedPrefs.getFloat("FUEL_SESSION_MAX_SPEED", 0.0f)
+            val minTripKm = sharedPrefs.getFloat("FUEL_MIN_TRIP_KM", 1.0f)
+            val minPeakSpeed = sharedPrefs.getFloat("FUEL_MIN_PEAK_SPEED", 15.0f)
+
+            val startLiters = sharedPrefs.getFloat("SESSION_START_LITERS", litersNow)
+            val startTrip = sharedPrefs.getFloat("SESSION_START_TRIP", tripNow)
+            val startOdo = sharedPrefs.getFloat("SESSION_START_ODO", odoNow)
+            val startAlerted = sharedPrefs.getBoolean("SESSION_START_ALERTED", alertNow)
+
+            val isTooShort = minTripKm > 0f && sessionKm < minTripKm
+            val isTooSlow = minPeakSpeed > 0f && maxSpeed < minPeakSpeed
+
+            if (isTooShort || isTooSlow) {
+                sharedPrefs.edit()
+                    .putBoolean("FUEL_HAS_PENDING", sessionKm >= 0.01f)
+                    .putFloat("PENDING_FUEL_LITERS", litersNow)
+                    .putFloat("PENDING_FUEL_TRIP", tripNow)
+                    .putFloat("PENDING_FUEL_ODO", odoNow)
+                    .putBoolean("PENDING_FUEL_ALERTED", alertNow)
+                    .putFloat("PENDING_SESSION_KM", sessionKm)
+                    .putLong("PENDING_SESSION_START_TIME", startTimeMs)
+                    .putLong("PENDING_SESSION_END_TIME", endTimeMs)
+                    .putLong("PENDING_SESSION_DURATION_MS", durationMs)
+                    .putFloat("PENDING_SESSION_MAX_SPEED", maxSpeed)
+                    .putFloat("FUEL_CURRENT_LITERS", startLiters)
+                    .putFloat("FUEL_TRIP_KM", startTrip)
+                    .putFloat("FUEL_ODOMETER", startOdo)
+                    .putBoolean("FUEL_RESERVE_ALERTED", startAlerted)
+                    .apply()
+
+                val title = when {
+                    sessionKm < 0.01f -> "No movement detected"
+                    isTooShort && isTooSlow -> String.format(Locale.US, "Short & slow movement (+%.2f km)", sessionKm)
+                    isTooShort -> String.format(Locale.US, "Short movement detected (+%.2f km)", sessionKm)
+                    else -> String.format(Locale.US, "Low speed detected (peak %.0f km/h)", maxSpeed)
+                }
+
+                val msg = if (sessionKm < 0.01f) {
+                    "Duration: $durationStr • Ended: $endTimeStr\nNo distance recorded. Tank and odometer were not changed."
+                } else {
+                    String.format(
+                        Locale.US,
+                        "Duration: %s • Ended: %s (peak %.0f km/h)\nDistance not added. Add %.2f km anyway?",
+                        durationStr, endTimeStr, maxSpeed, sessionKm
+                    )
+                }
+
+                sendFuelTripFeedbackNotification(
+                    title = title,
+                    message = msg,
+                    actionLabel = if (sessionKm >= 0.01f) "Add values" else null,
+                    actionIntentName = if (sessionKm >= 0.01f) "ACTION_APPLY_PENDING_TRIP" else null
+                )
+            } else {
+                val lastRealKml = sharedPrefs.getFloat("LAST_REAL_KML", 0.0f)
+                sharedPrefs.edit()
+                    .putBoolean("FUEL_HAS_PENDING", false)
+                    .putBoolean("FUEL_HAS_BACKUP", true)
+                    .putBoolean("LAST_ACTION_WAS_GPS_TRIP", true)
+                    .putFloat("PREV_FUEL_LITERS", startLiters)
+                    .putFloat("PREV_FUEL_TRIP", startTrip)
+                    .putFloat("PREV_FUEL_ODO", startOdo)
+                    .putFloat("PREV_LAST_REAL_KML", lastRealKml)
+                    .putBoolean("PREV_FUEL_ALERTED", startAlerted)
+                    .putFloat("PREV_OIL_LAST_ODO", oilLastOdo)
+                    .apply()
+
+                FuelStatsHelper.recordDistance(this, sessionKm)
+                val autoTag = TripHistoryManager.recordGpsTrip(this, startTimeMs, endTimeMs, durationMs, sessionKm, maxSpeed)
+
+                val rangeKm = (litersNow * avg).toInt()
+                val oilWarning = buildOilWarningText(sharedPrefs, odoNow)
+                val tagSuffix = if (autoTag.isNotEmpty()) " • 🏷️ $autoTag" else ""
+                val timeLine = "Duration: $durationStr • Ended: $endTimeStr$tagSuffix"
+                val statsLine = String.format(
+                    Locale.US,
+                    "Remaining: %.2f L (~%d km) | Odo: %.1f km",
+                    litersNow, rangeKm, odoNow
+                )
+                val fullMessage = if (oilWarning.isNotEmpty()) {
+                    "$timeLine\n$statsLine\n$oilWarning"
+                } else {
+                    "$timeLine\n$statsLine"
+                }
+
+                sendFuelTripFeedbackNotification(
+                    title = String.format(Locale.US, "🏁 Trip Finished (+%.2f km)", sessionKm),
+                    message = fullMessage,
+                    actionLabel = "Undo",
+                    actionIntentName = "ACTION_UNDO_FUEL"
+                )
+            }
         }
         updateFuelNotification()
         updateWatchDisplay()
+    }
+
+    private fun buildOilWarningText(sharedPrefs: android.content.SharedPreferences, currentOdo: Float): String {
+        val oilLastOdo = sharedPrefs.getFloat("FUEL_OIL_LAST_ODO", 0.0f)
+        val oilInterval = sharedPrefs.getFloat("FUEL_OIL_INTERVAL", 1000.0f).coerceAtLeast(100.0f)
+        if (oilLastOdo <= 0f || currentOdo <= 0f) return ""
+        val kmLeft = oilInterval - (currentOdo - oilLastOdo)
+        return when {
+            kmLeft <= 0f -> String.format(Locale.US, "🛢️ Oil change OVERDUE (+%.0f km)!", kotlin.math.abs(kmLeft))
+            kmLeft <= 100f -> String.format(Locale.US, "🛢️ Oil change due in %.0f km!", kmLeft)
+            else -> ""
+        }
+    }
+
+    private fun applyPendingFilteredTrip() {
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        if (!sharedPrefs.getBoolean("FUEL_HAS_PENDING", false)) return
+
+        val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+        val curLiters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+        val curTrip = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+        val curOdo = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+        val curAlert = sharedPrefs.getBoolean("FUEL_RESERVE_ALERTED", false)
+        val curRealKml = sharedPrefs.getFloat("LAST_REAL_KML", 0.0f)
+        val curOilLastOdo = sharedPrefs.getFloat("FUEL_OIL_LAST_ODO", 0.0f)
+
+        val pendLiters = sharedPrefs.getFloat("PENDING_FUEL_LITERS", curLiters)
+        val pendTrip = sharedPrefs.getFloat("PENDING_FUEL_TRIP", curTrip)
+        val pendOdo = sharedPrefs.getFloat("PENDING_FUEL_ODO", curOdo)
+        val pendAlert = sharedPrefs.getBoolean("PENDING_FUEL_ALERTED", curAlert)
+        val pendKm = sharedPrefs.getFloat("PENDING_SESSION_KM", 0.0f)
+        val pendStartTs = sharedPrefs.getLong("PENDING_SESSION_START_TIME", System.currentTimeMillis())
+        val pendEndTs = sharedPrefs.getLong("PENDING_SESSION_END_TIME", System.currentTimeMillis())
+        val pendDurationMs = sharedPrefs.getLong("PENDING_SESSION_DURATION_MS", 0L)
+        val pendMaxSpeed = sharedPrefs.getFloat("PENDING_SESSION_MAX_SPEED", 0.0f)
+
+        sharedPrefs.edit()
+            .putBoolean("FUEL_HAS_PENDING", false)
+            .putBoolean("FUEL_HAS_BACKUP", true)
+            .putBoolean("LAST_ACTION_WAS_GPS_TRIP", true)
+            .putFloat("PREV_FUEL_LITERS", curLiters)
+            .putFloat("PREV_FUEL_TRIP", curTrip)
+            .putFloat("PREV_FUEL_ODO", curOdo)
+            .putFloat("PREV_LAST_REAL_KML", curRealKml)
+            .putBoolean("PREV_FUEL_ALERTED", curAlert)
+            .putFloat("PREV_OIL_LAST_ODO", curOilLastOdo)
+            .putFloat("FUEL_CURRENT_LITERS", pendLiters)
+            .putFloat("FUEL_TRIP_KM", pendTrip)
+            .putFloat("FUEL_ODOMETER", pendOdo)
+            .putBoolean("FUEL_RESERVE_ALERTED", pendAlert)
+            .apply()
+
+        FuelStatsHelper.recordDistance(this, pendKm)
+        TripHistoryManager.recordGpsTrip(this, pendStartTs, pendEndTs, pendDurationMs, pendKm, pendMaxSpeed)
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.cancel(FUEL_STATUS_ALERT_ID)
+        updateWatchDisplay()
+
+        alarmHandler.post {
+            Toast.makeText(
+                applicationContext,
+                String.format(Locale.US, "Added +%.2f km to odometer and tank!", pendKm),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun undoLastFuelChangeFromNotification() {
+        val sharedPrefs = getSharedPreferences("BandTriggerPrefs", Context.MODE_PRIVATE)
+        if (!sharedPrefs.getBoolean("FUEL_HAS_BACKUP", false)) return
+
+        val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
+        val curLiters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
+        val curTrip = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+        val curOdo = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+        val curRealKml = sharedPrefs.getFloat("LAST_REAL_KML", 0.0f)
+        val curAlert = sharedPrefs.getBoolean("FUEL_RESERVE_ALERTED", false)
+        val curOilLast = sharedPrefs.getFloat("FUEL_OIL_LAST_ODO", 0.0f)
+
+        val prevLiters = sharedPrefs.getFloat("PREV_FUEL_LITERS", curLiters)
+        val prevTrip = sharedPrefs.getFloat("PREV_FUEL_TRIP", curTrip)
+        val prevOdo = sharedPrefs.getFloat("PREV_FUEL_ODO", curOdo)
+        val prevRealKml = sharedPrefs.getFloat("PREV_LAST_REAL_KML", curRealKml)
+        val prevAlert = sharedPrefs.getBoolean("PREV_FUEL_ALERTED", curAlert)
+        val prevOilLast = sharedPrefs.getFloat("PREV_OIL_LAST_ODO", curOilLast)
+
+        sharedPrefs.edit()
+            .putFloat("FUEL_CURRENT_LITERS", prevLiters)
+            .putFloat("FUEL_TRIP_KM", prevTrip)
+            .putFloat("FUEL_ODOMETER", prevOdo)
+            .putFloat("LAST_REAL_KML", prevRealKml)
+            .putBoolean("FUEL_RESERVE_ALERTED", prevAlert)
+            .putFloat("FUEL_OIL_LAST_ODO", prevOilLast)
+            .putFloat("PREV_FUEL_LITERS", curLiters)
+            .putFloat("PREV_FUEL_TRIP", curTrip)
+            .putFloat("PREV_FUEL_ODO", curOdo)
+            .putFloat("PREV_LAST_REAL_KML", curRealKml)
+            .putBoolean("PREV_FUEL_ALERTED", curAlert)
+            .putFloat("PREV_OIL_LAST_ODO", curOilLast)
+            .apply()
+
+        FuelStatsHelper.toggleUndoLastDistance(this)
+        if (sharedPrefs.getBoolean("LAST_ACTION_WAS_GPS_TRIP", false)) {
+            TripHistoryManager.toggleUndoLastTrip(this)
+        }
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.cancel(FUEL_STATUS_ALERT_ID)
+        updateWatchDisplay()
+
+        alarmHandler.post {
+            Toast.makeText(applicationContext, "Trip undone! Previous values restored.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun vibrateFeedbackPulse(isStopping: Boolean) {
@@ -391,7 +649,12 @@ class MediaService : Service() {
         }
     }
 
-    private fun sendFuelTripFeedbackNotification(title: String, message: String) {
+    private fun sendFuelTripFeedbackNotification(
+        title: String,
+        message: String,
+        actionLabel: String?,
+        actionIntentName: String?
+    ) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
@@ -408,8 +671,23 @@ class MediaService : Service() {
             .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+
+        if (!actionLabel.isNullOrEmpty() && !actionIntentName.isNullOrEmpty()) {
+            val actionIntent = Intent(this, MediaService::class.java).apply {
+                action = actionIntentName
+            }
+            val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val reqCode = if (actionIntentName == "ACTION_UNDO_FUEL") 301 else 302
+            val actionPendingIntent = PendingIntent.getService(this, reqCode, actionIntent, pendingFlags)
+            builder.addAction(android.R.drawable.ic_menu_revert, actionLabel, actionPendingIntent)
+        }
 
         notificationManager.notify(FUEL_STATUS_ALERT_ID, builder.build())
     }
@@ -421,7 +699,7 @@ class MediaService : Service() {
                     val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
                     gpsWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BandTrigger::FuelGpsWakeLock").apply {
                         setReferenceCounted(false)
-                        acquire(4 * 60 * 60 * 1000L) // Até 4h de viagem contínua com a tela bloqueada
+                        acquire(4 * 60 * 60 * 1000L)
                     }
                 }
                 lastLocation = null
@@ -469,8 +747,10 @@ class MediaService : Service() {
         val cap = sharedPrefs.getFloat("FUEL_CAPACITY", 14.0f)
         val liters = sharedPrefs.getFloat("FUEL_CURRENT_LITERS", cap)
         val avg = sharedPrefs.getFloat("FUEL_AVG_KML", 35.0f)
-        val tripKm = sharedPrefs.getFloat("FUEL_TRIP_KM", 0.0f)
+        val sessionKm = sharedPrefs.getFloat("FUEL_SESSION_KM", 0.0f)
         val odoKm = sharedPrefs.getFloat("FUEL_ODOMETER", 0.0f)
+        val startMs = sharedPrefs.getLong("SESSION_START_TIME", System.currentTimeMillis())
+        val elapsedStr = FuelStatsHelper.formatDuration((System.currentTimeMillis() - startMs).coerceAtLeast(0L))
         val rangeKm = (liters * avg).toInt()
 
         val stopIntent = Intent(this, MediaService::class.java).apply {
@@ -486,7 +766,7 @@ class MediaService : Service() {
         val builder = androidx.core.app.NotificationCompat.Builder(this, FUEL_CHANNEL_ID)
             .setSmallIcon(R.drawable.logo_band_trigger_small_icon)
             .setContentTitle(String.format(Locale.US, "Fuel Tracker: %.2f L (~%d km)", liters, rangeKm))
-            .setContentText(String.format(Locale.US, "Trip: %.1f km | Odo: %.1f km", tripKm, odoKm))
+            .setContentText(String.format(Locale.US, "Ride: +%.2f km • %s | Odo: %.1f km", sessionKm, elapsedStr, odoKm))
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .addAction(android.R.drawable.ic_media_pause, "Stop Trip", stopPendingIntent)
@@ -662,7 +942,6 @@ class MediaService : Service() {
                 } else if (currentAutomation.type.equals("ALARM", ignoreCase = true)) {
                     startAlarmLoop(currentAutomation.name)
                 } else if (!currentAutomation.isToggle) {
-                    // Correção crítica: Automações de gatilho único (sem URL Off, ex: portão) SEMPRE disparam Turn ON
                     currentAutomation.currentState = true
                     saveAutomationsToMemory()
                     updatePlaybackState(PlaybackState.STATE_PLAYING)

@@ -52,6 +52,47 @@ class MainActivity : AppCompatActivity() {
         // Set initial fragment to Automations (index 1) without smooth scroll animation
         viewPager.setCurrentItem(1, false)
     }
+
+    private fun requestNearbyAndLocalNetworkPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+
+        // No Android 12+ (API 31+), pede BLUETOOTH_CONNECT (grupo Dispositivos por perto)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.BLUETOOTH_CONNECT
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+
+        // Detecta dinamicamente se o Android atual suporta ACCESS_LOCAL_NETWORK (Android 17+)
+        val localNetPerm = "android.permission.ACCESS_LOCAL_NETWORK"
+        val supportsLocalNet = try {
+            packageManager.getPermissionInfo(localNetPerm, 0)
+            true
+        } catch (_: Exception) {
+            false
+        }
+
+        if (supportsLocalNet &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                localNetPerm
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsToRequest.add(localNetPerm)
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            androidx.core.app.ActivityCompat.requestPermissions(
+                this,
+                permissionsToRequest.toTypedArray(),
+                1007
+            )
+        }
+    }
 }
 
 /**
